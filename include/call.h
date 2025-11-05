@@ -4,6 +4,7 @@
 
 #ifndef CUDA_TUTORIAL_EXAMPLE_CALL_H
 #define CUDA_TUTORIAL_EXAMPLE_CALL_H
+
 #include "check.h"
 #include "kernel.h"
 
@@ -50,6 +51,8 @@ void call_add_float4(unsigned N, float *a, float *b, float *ret) {
     cudaFree(dev_b);
     cudaFree(dev_ret);
 }
+
+void call_add_cublas(unsigned N, float *a, float *b, float *ret);
 
 template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
 void call_dot(unsigned N, float *a, float *b, float *ret) {
@@ -140,15 +143,21 @@ void call_dot_warp_shuffle(unsigned N, float *a, float *b, float *ret) {
     cudaFree(dev_ret);
 }
 
+void call_dot_cublas(unsigned N, float *a, float *b, float *ret);
+
 void call_transpose_naive(unsigned M, unsigned N, float *input, float *output);
 
 void call_transpose_padding(unsigned M, unsigned N, float *input, float *output);
 
 void call_transpose_swizzle(unsigned M, unsigned N, float *input, float *output);
 
+void call_transpose_cubalas(unsigned M, unsigned N, float *input, float *output);
+
 void call_sgemm_naive(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret);
 
 void call_sgemm_block_tile(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret);
 
 void call_sgemm_thread_tile(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret);
+
+void call_sgemm_cublas(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret);
 #endif //CUDA_TUTORIAL_EXAMPLE_CALL_H

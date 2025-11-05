@@ -7,14 +7,14 @@
 
 #include "call.h"
 
-int main(void) {
+int main() {
     constexpr unsigned N = 1 << 20;
     // host memory malloc
     float *a = (float *) malloc(N * sizeof(float)), *b = (float *) malloc(N * sizeof(float)), *ret = (float *) malloc(
         N * sizeof(float));
     for (unsigned i = 0; i < N; ++i) {
-        a[i]=1.0f;
-        b[i]=2.0f;
+        a[i] = 1.0f;
+        b[i] = 2.0f;
     }
     // call add kernel
     constexpr unsigned threadNum = 256;
@@ -24,7 +24,8 @@ int main(void) {
     // call add float4
     call_add_float4<blockNum, threadNum>(N, a, b, ret);
     printf("add float4 error: %f", add_error(N, a, b, ret));
-
+    // call add cublas
+    call_add_cublas(N, a, b, ret);
     // host free
     free(a);
     free(b);

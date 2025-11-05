@@ -1,2 +1,5 @@
+#!/bin/bash
 mkdir include main
-sh ./nsys-install.sh
+source ./nsys-install.sh
+# colab已安装ncu的版本有点老
+#source ./ncu-install.sh

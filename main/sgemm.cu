@@ -7,8 +7,6 @@
 
 #include "call.h"
 #include "check.h"
-#include "kernel.h"
-#include "../include/call.h"
 
 int main() {
     constexpr unsigned M = 1 << 10, N = 1 << 11, K = 1 << 12;
@@ -35,6 +33,8 @@ int main() {
     // call sgemm thread tile kernel
     call_sgemm_thread_tile(M, K, N, a, b, ret);
     std::cout << "sgemm thread tile error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
+    // call cublast sgemm
+    call_sgemm_cublas(M, K, N, a, b, ret);
     // host free
     free(a);
     free(b);

@@ -13,7 +13,7 @@ int main(void) {
     float *a = (float *) malloc(N * sizeof(float)), *b = (float *) malloc(N * sizeof(float)), *ret = (float *)
             malloc(sizeof(float));
     for (int i = 0; i < N; ++i) {
-        a[i]=b[i]=1.0f;
+        a[i] = b[i] = 1.0f;
     }
     // call dot kernel
     constexpr unsigned threadNum = 256;
@@ -29,6 +29,8 @@ int main(void) {
     // call dot shared warp shuffle kernel
     call_dot_warp_shuffle<blockNum, threadNum>(N, a, b, ret);
     printf("dor shared warp shuffle error: %f\n", dot_error(N, a, b, ret));
+    // call dot cublas
+    call_dot_cublas(N, a, b, ret);
     // host free
     free(a);
     free(b);

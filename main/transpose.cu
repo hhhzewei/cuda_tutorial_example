@@ -28,6 +28,8 @@ int main() {
     // call transpose swizzle kernel
     call_transpose_swizzle(M, N, input, output);
     std::cout << "transpose swizzle error: " << transpose_error(M, N, input, output) << std::endl;
+    // // call transpose cublas
+    // call_transpose_cubalas(M, N, input, output);
     // host free
     free(input);
     free(output);
