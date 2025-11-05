@@ -1,0 +1,154 @@
+//
+// Created by hzw on 2025/11/4.
+//
+
+#ifndef CUDA_TUTORIAL_EXAMPLE_CALL_H
+#define CUDA_TUTORIAL_EXAMPLE_CALL_H
+#include "check.h"
+#include "kernel.h"
+
+template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
+void call_add(unsigned N, float *a, float *b, float *ret) {
+    // device memory malloc
+    float *dev_a, *dev_b, *dev_ret;
+    cudaMalloc(&dev_a, N * sizeof(float));
+    cudaMalloc(&dev_b, N * sizeof(float));
+    cudaMalloc(&dev_ret, N * sizeof(float));
+    // copy input
+    cudaMemcpy(dev_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_b, b, N * sizeof(float), cudaMemcpyHostToDevice);
+    // kernel
+    add<<<BLOCK_NUM,THREAD_NUM>>>(N, dev_a, dev_b, dev_ret);
+    check_error(cudaGetLastError());
+    check_error(cudaDeviceSynchronize());
+    // copy output
+    cudaMemcpy(ret, dev_ret, N * sizeof(float), cudaMemcpyDeviceToHost);
+    // device free
+    cudaFree(dev_a);
+    cudaFree(dev_b);
+    cudaFree(dev_ret);
+}
+
+template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
+void call_add_float4(unsigned N, float *a, float *b, float *ret) {
+    // device memory malloc
+    float *dev_a, *dev_b, *dev_ret;
+    cudaMalloc(&dev_a, N * sizeof(float));
+    cudaMalloc(&dev_b, N * sizeof(float));
+    cudaMalloc(&dev_ret, N * sizeof(float));
+    // copy input
+    cudaMemcpy(dev_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_b, b, N * sizeof(float), cudaMemcpyHostToDevice);
+    // kernel
+    add_float4<<<BLOCK_NUM,THREAD_NUM>>>(N, dev_a, dev_b, dev_ret);
+    check_error(cudaGetLastError());
+    check_error(cudaDeviceSynchronize());
+    // copy output
+    cudaMemcpy(ret, dev_ret, N * sizeof(float), cudaMemcpyDeviceToHost);
+    // device free
+    cudaFree(dev_a);
+    cudaFree(dev_b);
+    cudaFree(dev_ret);
+}
+
+template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
+void call_dot(unsigned N, float *a, float *b, float *ret) {
+    // device memory
+    float *dev_a, *dev_b, *dev_ret;
+    cudaMalloc(&dev_a, N * sizeof(float));
+    cudaMalloc(&dev_b, N * sizeof(float));
+    cudaMalloc(&dev_ret, sizeof(float));
+    // copy input
+    cudaMemcpy(dev_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_b, b, N * sizeof(float), cudaMemcpyHostToDevice);
+    // kernel
+    dot<<<BLOCK_NUM, THREAD_NUM>>>(N, dev_a, dev_b, dev_ret);
+    check_error(cudaGetLastError());
+    check_error(cudaDeviceSynchronize());
+    // copy output
+    cudaMemcpy(ret, dev_ret, sizeof(float), cudaMemcpyDeviceToHost);
+    // cuda free
+    cudaFree(dev_a);
+    cudaFree(dev_b);
+    cudaFree(dev_ret);
+}
+
+template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
+void call_dot_shared(unsigned N, float *a, float *b, float *ret) {
+    // device memory
+    float *dev_a, *dev_b, *dev_ret;
+    cudaMalloc(&dev_a, N * sizeof(float));
+    cudaMalloc(&dev_b, N * sizeof(float));
+    cudaMalloc(&dev_ret, sizeof(float));
+    // copy input
+    cudaMemcpy(dev_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_b, b, N * sizeof(float), cudaMemcpyHostToDevice);
+    // kernel
+    dot_share<BLOCK_NUM><<<BLOCK_NUM, THREAD_NUM>>>(N, dev_a, dev_b, dev_ret);
+    check_error(cudaGetLastError());
+    check_error(cudaDeviceSynchronize());
+    // copy output
+    cudaMemcpy(ret, dev_ret, sizeof(float), cudaMemcpyDeviceToHost);
+    // cuda free
+    cudaFree(dev_a);
+    cudaFree(dev_b);
+    cudaFree(dev_ret);
+}
+
+template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
+void call_dot_shared_external(unsigned N, float *a, float *b, float *ret) {
+    // device memory
+    float *dev_a, *dev_b, *dev_ret;
+    cudaMalloc(&dev_a, N * sizeof(float));
+    cudaMalloc(&dev_b, N * sizeof(float));
+    cudaMalloc(&dev_ret, sizeof(float));
+    // copy input
+    cudaMemcpy(dev_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_b, b, N * sizeof(float), cudaMemcpyHostToDevice);
+    // kernel
+    dot_shared_external<<<BLOCK_NUM, THREAD_NUM,BLOCK_NUM * sizeof(float)>>>(N, dev_a, dev_b, dev_ret);
+    check_error(cudaGetLastError());
+    check_error(cudaDeviceSynchronize());
+    // copy output
+    cudaMemcpy(ret, dev_ret, sizeof(float), cudaMemcpyDeviceToHost);
+    // cuda free
+    cudaFree(dev_a);
+    cudaFree(dev_b);
+    cudaFree(dev_ret);
+}
+
+template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
+void call_dot_warp_shuffle(unsigned N, float *a, float *b, float *ret) {
+    // device memory
+    float *dev_a, *dev_b, *dev_ret;
+    cudaMalloc(&dev_a, N * sizeof(float));
+    cudaMalloc(&dev_b, N * sizeof(float));
+    cudaMalloc(&dev_ret, sizeof(float));
+    // copy input
+    cudaMemcpy(dev_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_b, b, N * sizeof(float), cudaMemcpyHostToDevice);
+    // kernel
+    unsigned warp_num = CEIL(BLOCK_NUM, 32);
+    dot_warp_shuffle<<<BLOCK_NUM, THREAD_NUM,warp_num * sizeof(float)>>>(N, dev_a, dev_b, dev_ret);
+    check_error(cudaGetLastError());
+    check_error(cudaDeviceSynchronize());
+    // copy output
+    cudaMemcpy(ret, dev_ret, sizeof(float), cudaMemcpyDeviceToHost);
+    // cuda free
+    cudaFree(dev_a);
+    cudaFree(dev_b);
+    cudaFree(dev_ret);
+}
+
+void call_transpose_naive(unsigned M, unsigned N, float *input, float *output);
+
+void call_transpose_padding(unsigned M, unsigned N, float *input, float *output);
+
+void call_transpose_swizzle(unsigned M, unsigned N, float *input, float *output);
+
+void call_sgemm_naive(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret);
+
+void call_sgemm_block_tile(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret);
+
+void call_sgemm_thread_tile(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret);
+#endif //CUDA_TUTORIAL_EXAMPLE_CALL_H
