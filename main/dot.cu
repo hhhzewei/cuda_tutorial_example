@@ -2,6 +2,7 @@
 // Created by hzw on 2025/10/28.
 //
 #include <cstdio>
+#include <iostream>
 
 #include "call.h"
 #include "kernel.h"
@@ -19,16 +20,16 @@ int main(void) {
     constexpr unsigned threadNum = 256;
     constexpr unsigned blockNum = CEIL(N, threadNum);
     call_dot<blockNum, threadNum>(N, a, b, ret);
-    printf("dot error: %f\n", dot_error(N, a, b, ret));
+    std::cout << "dot error: " << dot_error(N, a, b, ret) << std::endl;
     // call dot shared kernel
     call_dot_shared<blockNum, threadNum>(N, a, b, ret);
-    printf("dor shared error: %f\n", dot_error(N, a, b, ret));
+    std::cout << "dor shared error: " << dot_error(N, a, b, ret) << std::endl;
     // call dot shared external kernel
     call_dot_shared_external<blockNum, threadNum>(N, a, b, ret);
-    printf("dor shared external error: %f\n", dot_error(N, a, b, ret));
+    std::cout << "dor shared external error: " << dot_error(N, a, b, ret) << std::endl;
     // call dot shared warp shuffle kernel
     call_dot_warp_shuffle<blockNum, threadNum>(N, a, b, ret);
-    printf("dor shared warp shuffle error: %f\n", dot_error(N, a, b, ret));
+    std::cout << "dor shared warp shuffle error: " << dot_error(N, a, b, ret) << std::endl;
     // call dot cublas
     call_dot_cublas(N, a, b, ret);
     // host free

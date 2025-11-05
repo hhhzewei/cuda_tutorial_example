@@ -4,6 +4,7 @@
 #include "kernel.h"
 #include "check.h"
 #include <cstdio>
+#include <iostream>
 
 #include "call.h"
 
@@ -20,10 +21,10 @@ int main() {
     constexpr unsigned threadNum = 256;
     constexpr unsigned blockNum = CEIL(N, threadNum);
     call_add<blockNum, threadNum>(N, a, b, ret);
-    printf("add error: %f", add_error(N, a, b, ret));
+    std::cout << "add error: " << add_error(N, a, b, ret) << std::endl;
     // call add float4
     call_add_float4<blockNum, threadNum>(N, a, b, ret);
-    printf("add float4 error: %f", add_error(N, a, b, ret));
+    std::cout << "add float4 error: " << add_error(N, a, b, ret) << std::endl;
     // call add cublas
     call_add_cublas(N, a, b, ret);
     // host free
