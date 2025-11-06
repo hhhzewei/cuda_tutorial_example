@@ -5,15 +5,53 @@
 
 #include <cublas_v2.h>
 
-void call_add_cublas(unsigned N, float *a, float *b, float *ret) {
+void prepare_elementwise(unsigned N, float *a, float *b, float *&dev_a, float *&dev_b, float *&dev_ret) {\
     // device memory malloc
-    float *dev_a, *dev_b, *dev_ret;
     cudaMalloc(&dev_a, N * sizeof(float));
     cudaMalloc(&dev_b, N * sizeof(float));
     cudaMalloc(&dev_ret, N * sizeof(float));
     // copy input
     cudaMemcpy(dev_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(dev_b, b, N * sizeof(float), cudaMemcpyHostToDevice);
+}
+
+void prepare_reduce(unsigned N, float *a, float *b, float *&dev_a, float *&dev_b, float *&dev_ret) {
+    // device memory malloc
+    cudaMalloc(&dev_a, N * sizeof(float));
+    cudaMalloc(&dev_b, N * sizeof(float));
+    cudaMalloc(&dev_ret, sizeof(float));
+    // copy input
+    cudaMemcpy(dev_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_b, b, N * sizeof(float), cudaMemcpyHostToDevice);
+}
+
+void prepare_transpose(unsigned M, unsigned N, float *input, float *&dev_input, float *&dev_output) {
+    const unsigned SIZE = M * N * sizeof(float);
+    cudaMalloc(&dev_input, SIZE);
+    cudaMalloc(&dev_output, SIZE);
+    cudaMemcpy(dev_input, input, SIZE, cudaMemcpyHostToDevice);
+}
+
+void prepare_sgemm(unsigned M, unsigned K, unsigned N, float *a, float *b, float *&dev_a, float *&dev_b,
+                   float *&dev_ret) {
+    cudaMalloc(&dev_a, M * K * sizeof(float));
+    cudaMalloc(&dev_b, N * K * sizeof(float));
+    cudaMalloc(&dev_ret, M * N * sizeof(float));
+    // copy input
+    cudaMemcpy(dev_a, a, M * K * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_b, b, K * N * sizeof(float), cudaMemcpyHostToDevice);
+}
+
+void batch_free(std::initializer_list<float *> ptr_list) {
+    for (auto p: ptr_list) {
+        cudaFree(p);
+    }
+}
+
+void call_add_cublas(unsigned N, float *a, float *b, float *ret) {
+    // device memory malloc
+    float *dev_a, *dev_b, *dev_ret;
+    prepare_elementwise(N, a, b, dev_a, dev_b, dev_ret);
     // kernel
     cublasHandle_t handle{};
     cublasCreate(&handle);
@@ -22,20 +60,13 @@ void call_add_cublas(unsigned N, float *a, float *b, float *ret) {
     // copy output
     cudaMemcpy(ret, dev_ret, N * sizeof(float), cudaMemcpyDeviceToHost);
     // device free
-    cudaFree(dev_a);
-    cudaFree(dev_b);
-    cudaFree(dev_ret);
+    batch_free({dev_a, dev_b, dev_ret});
 }
 
 void call_dot_cublas(unsigned N, float *a, float *b, float *ret) {
     // device memory
     float *dev_a, *dev_b, *dev_ret;
-    cudaMalloc(&dev_a, N * sizeof(float));
-    cudaMalloc(&dev_b, N * sizeof(float));
-    cudaMalloc(&dev_ret, sizeof(float));
-    // copy input
-    cudaMemcpy(dev_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_b, b, N * sizeof(float), cudaMemcpyHostToDevice);
+    prepare_reduce(N, a, b, dev_a, dev_b, dev_ret);
     // kernel
     cublasHandle_t handle;
     cublasCreate(&handle);
@@ -43,18 +74,14 @@ void call_dot_cublas(unsigned N, float *a, float *b, float *ret) {
     // copy output
     cudaMemcpy(ret, dev_ret, sizeof(float), cudaMemcpyDeviceToHost);
     // cuda free
-    cudaFree(dev_a);
-    cudaFree(dev_b);
-    cudaFree(dev_ret);
+    batch_free({dev_a, dev_b, dev_ret});
 }
 
 void call_transpose_naive(unsigned M, unsigned N, float *input, float *output) {
     // cuda malloc
-    const unsigned SIZE = M * N * sizeof(float);
     float *dev_input, *dev_output;
-    cudaMalloc(&dev_input, SIZE);
-    cudaMalloc(&dev_output, SIZE);
-    cudaMemcpy(dev_input, input, SIZE, cudaMemcpyHostToDevice);
+    unsigned SIZE = M * N * sizeof(float);
+    prepare_transpose(M, N, input, dev_input, dev_output);
     // kernel
     constexpr unsigned warp_size = 32;
     dim3 blockDim(warp_size, warp_size), gridDim(CEIL(N, warp_size),CEIL(M, warp_size));
@@ -64,18 +91,15 @@ void call_transpose_naive(unsigned M, unsigned N, float *input, float *output) {
     // copy output
     cudaMemcpy(output, dev_output, SIZE, cudaMemcpyDeviceToHost);
     // cuda free
-    cudaFree(dev_input);
-    cudaFree(dev_output);
+    batch_free({dev_input, dev_output});
 }
 
 
 void call_transpose_padding(unsigned M, unsigned N, float *input, float *output) {
     // cuda malloc
-    const unsigned SIZE = M * N * sizeof(float);
     float *dev_input, *dev_output;
-    cudaMalloc(&dev_input, SIZE);
-    cudaMalloc(&dev_output, SIZE);
-    cudaMemcpy(dev_input, input, SIZE, cudaMemcpyHostToDevice);
+    unsigned SIZE = M * N * sizeof(float);
+    prepare_transpose(M, N, input, dev_input, dev_output);
     // kernel
     constexpr unsigned warp_size = 32;
     dim3 blockDim(warp_size, warp_size), gridDim(CEIL(N, warp_size),CEIL(M, warp_size));
@@ -85,17 +109,14 @@ void call_transpose_padding(unsigned M, unsigned N, float *input, float *output)
     // copy output
     cudaMemcpy(output, dev_output, SIZE, cudaMemcpyDeviceToHost);
     // cuda free
-    cudaFree(dev_input);
-    cudaFree(dev_output);
+    batch_free({dev_input, dev_output});
 }
 
 void call_transpose_swizzle(unsigned M, unsigned N, float *input, float *output) {
     // cuda malloc
     const unsigned SIZE = M * N * sizeof(float);
     float *dev_input, *dev_output;
-    cudaMalloc(&dev_input, SIZE);
-    cudaMalloc(&dev_output, SIZE);
-    cudaMemcpy(dev_input, input, SIZE, cudaMemcpyHostToDevice);
+    prepare_transpose(M, N, input, dev_input, dev_output);
     // kernel
     constexpr unsigned warp_size = 32;
     dim3 blockDim(warp_size, warp_size), gridDim(CEIL(N, warp_size),CEIL(M, warp_size));
@@ -105,17 +126,14 @@ void call_transpose_swizzle(unsigned M, unsigned N, float *input, float *output)
     // copy output
     cudaMemcpy(output, dev_output, SIZE, cudaMemcpyDeviceToHost);
     // cuda free
-    cudaFree(dev_input);
-    cudaFree(dev_output);
+    batch_free({dev_input, dev_output});
 }
 
 void call_transpose_cubalas(unsigned M, unsigned N, float *input, float *output) {
     // cuda malloc
     const unsigned SIZE = M * N * sizeof(float);
     float *dev_input, *dev_output;
-    cudaMalloc(&dev_input, SIZE);
-    cudaMalloc(&dev_output, SIZE);
-    cudaMemcpy(dev_input, input, SIZE, cudaMemcpyHostToDevice);
+    prepare_transpose(M, N, input, dev_input, dev_output);
     // kernel
     cublasHandle_t handle{};
     cublasCreate(&handle);
@@ -135,19 +153,13 @@ void call_transpose_cubalas(unsigned M, unsigned N, float *input, float *output)
     // copy output
     cudaMemcpy(output, dev_output, SIZE, cudaMemcpyDeviceToHost);
     // cuda free
-    cudaFree(dev_input);
-    cudaFree(dev_output);
+    batch_free({dev_input, dev_output});
 }
 
 void call_sgemm_naive(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret) {
     // device memory
     float *dev_a, *dev_b, *dev_ret;
-    cudaMalloc(&dev_a, M * K * sizeof(float));
-    cudaMalloc(&dev_b, N * K * sizeof(float));
-    cudaMalloc(&dev_ret, M * N * sizeof(float));
-    // copy input
-    cudaMemcpy(dev_a, a, M * K * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_b, b, K * N * sizeof(float), cudaMemcpyHostToDevice);
+    prepare_sgemm(M, K, N, a, b, dev_a, dev_b, dev_ret);
     // kernel
     constexpr unsigned warp_size = 32;
     dim3 blockDim(warp_size, warp_size), gridDim(CEIL(N, warp_size),CEIL(M, warp_size));
@@ -157,20 +169,13 @@ void call_sgemm_naive(unsigned M, unsigned K, unsigned N, float *a, float *b, fl
     // copy output
     cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
     // cuda free
-    cudaFree(dev_a);
-    cudaFree(dev_b);
-    cudaFree(dev_ret);
+    batch_free({dev_a, dev_b, dev_ret});
 }
 
 void call_sgemm_block_tile(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret) {
     // device memory
     float *dev_a, *dev_b, *dev_ret;
-    cudaMalloc(&dev_a, M * K * sizeof(float));
-    cudaMalloc(&dev_b, N * K * sizeof(float));
-    cudaMalloc(&dev_ret, M * N * sizeof(float));
-    // copy input
-    cudaMemcpy(dev_a, a, M * K * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_b, b, K * N * sizeof(float), cudaMemcpyHostToDevice);
+    prepare_sgemm(M, K, N, a, b, dev_a, dev_b, dev_ret);
     // kernel
     constexpr unsigned warp_size = 32;
     dim3 blockDim(warp_size, warp_size), gridDim(CEIL(N, warp_size),CEIL(M, warp_size));
@@ -180,20 +185,13 @@ void call_sgemm_block_tile(unsigned M, unsigned K, unsigned N, float *a, float *
     // copy output
     cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
     // cuda free
-    cudaFree(dev_a);
-    cudaFree(dev_b);
-    cudaFree(dev_ret);
+    batch_free({dev_a, dev_b, dev_ret});
 }
 
 void call_sgemm_thread_tile(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret) {
     // device memory
     float *dev_a, *dev_b, *dev_ret;
-    cudaMalloc(&dev_a, M * K * sizeof(float));
-    cudaMalloc(&dev_b, K * N * sizeof(float));
-    cudaMalloc(&dev_ret, M * N * sizeof(float));
-    // copy input
-    cudaMemcpy(dev_a, a, M * K * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_b, b, K * N * sizeof(float), cudaMemcpyHostToDevice);
+    prepare_sgemm(M, K, N, a, b, dev_a, dev_b, dev_ret);
     // kernel
     constexpr unsigned warp_size = 32,
             thread_m = 2, thread_n = 2;
@@ -206,20 +204,13 @@ void call_sgemm_thread_tile(unsigned M, unsigned K, unsigned N, float *a, float 
     // copy output
     cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
     // cuda free
-    cudaFree(dev_a);
-    cudaFree(dev_b);
-    cudaFree(dev_ret);
+    batch_free({dev_a, dev_b, dev_ret});
 }
 
 void call_sgemm_cublas(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret) {
     // device memory
     float *dev_a, *dev_b, *dev_ret;
-    cudaMalloc(&dev_a, M * K * sizeof(float));
-    cudaMalloc(&dev_b, K * N * sizeof(float));
-    cudaMalloc(&dev_ret, M * N * sizeof(float));
-    // copy input
-    cudaMemcpy(dev_a, a, M * K * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_b, b, K * N * sizeof(float), cudaMemcpyHostToDevice);
+    prepare_sgemm(M, K, N, a, b, dev_a, dev_b, dev_ret);
     // kernel
     cublasHandle_t handle{};
     cublasCreate(&handle);
@@ -236,7 +227,5 @@ void call_sgemm_cublas(unsigned M, unsigned K, unsigned N, float *a, float *b, f
     // copy output
     // cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
     // cuda free
-    cudaFree(dev_a);
-    cudaFree(dev_b);
-    cudaFree(dev_ret);
+    batch_free({dev_a, dev_b, dev_ret});
 }

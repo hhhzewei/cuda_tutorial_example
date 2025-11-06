@@ -23,13 +23,13 @@ int main(void) {
     std::cout << "dot error: " << dot_error(N, a, b, ret) << std::endl;
     // call dot shared kernel
     call_dot_shared<blockNum, threadNum>(N, a, b, ret);
-    std::cout << "dor shared error: " << dot_error(N, a, b, ret) << std::endl;
+    std::cout << "dot shared error: " << dot_error(N, a, b, ret) << std::endl;
     // call dot shared external kernel
     call_dot_shared_external<blockNum, threadNum>(N, a, b, ret);
-    std::cout << "dor shared external error: " << dot_error(N, a, b, ret) << std::endl;
+    std::cout << "dot shared external error: " << dot_error(N, a, b, ret) << std::endl;
     // call dot shared warp shuffle kernel
     call_dot_warp_shuffle<blockNum, threadNum>(N, a, b, ret);
-    std::cout << "dor shared warp shuffle error: " << dot_error(N, a, b, ret) << std::endl;
+    std::cout << "dot shared warp shuffle error: " << *ret << " " << dot_error(N, a, b, ret) << std::endl;
     // call dot cublas
     call_dot_cublas(N, a, b, ret);
     // host free

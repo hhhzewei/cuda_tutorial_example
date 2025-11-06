@@ -71,7 +71,10 @@ __global__ void dot_warp_shuffle(unsigned n, float *a, float *b, float *ret) {
     extern __shared__ float tmp[];
     unsigned idx = threadIdx.x + blockDim.x * blockIdx.x, strip = gridDim.x * blockDim.x;
     unsigned warpNum = CEIL(blockDim.x, warpSize), warpIdx = threadIdx.x / warpSize, laneIdx =
-            blockDim.x - warpIdx * warpSize;
+            threadIdx.x - warpIdx * warpSize;
+    if (laneIdx == 0) {
+        tmp[warpIdx] = 0.0f;
+    }
     float value = 0.0f;
     for (unsigned i = idx; i < n; i += strip) {
         value += a[i] * b[i];
@@ -86,14 +89,11 @@ __global__ void dot_warp_shuffle(unsigned n, float *a, float *b, float *ret) {
         tmp[warpIdx] = value;
     }
     __syncthreads();
-    range = CEIL(blockDim.x, warpSize) >> 1;
     if (warpIdx == 0) {
         range = warpNum >> 1;
-        if (laneIdx < warpNum) {
-            value = tmp[laneIdx];
-        }
+        value = laneIdx < warpNum ? tmp[laneIdx] : 0.0f;
         while (range) {
-            value = __shfl_down_sync(0xffffffff, value, range);
+            value += __shfl_down_sync(0xffffffff, value, range);
             range >>= 1;
         }
         if (laneIdx == 0) {
