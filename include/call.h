@@ -128,7 +128,9 @@ void call_sgemm_naive(unsigned M, unsigned K, unsigned N, float *a, float *b, fl
 
 void call_sgemm_block_tile(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret);
 
-void call_sgemm_thread_tile(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret);
+void call_sgemm_thread_tile_v0(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret);
+
+void call_sgemm_thread_tile_v1(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret);
 
 void call_sgemm_cublas(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret);
 #endif //CUDA_TUTORIAL_EXAMPLE_CALL_H

@@ -31,9 +31,12 @@ int main() {
     call_sgemm_block_tile(M, K, N, a, b, ret);
     std::cout << "sgemm block tile error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call sgemm thread tile kernel
-    call_sgemm_thread_tile(M, K, N, a, b, ret);
-    std::cout << "sgemm thread tile error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
-    // call cublast sgemm
+    call_sgemm_thread_tile_v0(M, K, N, a, b, ret);
+    std::cout << "sgemm thread tile v0 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
+    // call sgemm thread tile v1 kernel
+    call_sgemm_thread_tile_v1(M, K, N, a, b, ret);
+    std::cout << "sgemm thread tile v1 result:" << *ret << ", error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
+    // // call cublast sgemm
     call_sgemm_cublas(M, K, N, a, b, ret);
     // host free
     free(a);

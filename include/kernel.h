@@ -99,10 +99,10 @@ __global__ void sgemm_naive(unsigned m, unsigned k, unsigned n, float *a, float 
 
 template<unsigned TILE_M, unsigned TILE_N, unsigned TILE_K>
 __global__ void sgemm_block_tile(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret) {
-    __shared__ unsigned tile_a[TILE_M][TILE_K], tile_b[TILE_K][TILE_N];
+    __shared__ float tile_a[TILE_M][TILE_K], tile_b[TILE_K][TILE_N];
     unsigned tx = threadIdx.x, ty = threadIdx.y,
             x = blockDim.x * blockIdx.x + threadIdx.x, y = blockDim.y * blockIdx.y + threadIdx.y;
-    unsigned value = 0.0f;
+    float value = 0.0f;
     for (unsigned k = 0; k < K; k += TILE_K) {
         tile_a[ty][tx] = a[y * K + k + tx];
         tile_b[ty][tx] = b[(k + ty) * N + x];
@@ -115,9 +115,9 @@ __global__ void sgemm_block_tile(unsigned M, unsigned K, unsigned N, float *a, f
     ret[y * N + x] = value;
 }
 
-template<unsigned TILE_M, unsigned TILE_N, unsigned TILE_K,  unsigned THREAD_M, unsigned THREAD_N>
-__global__ void sgemm_thread_tile(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret) {
-    __shared__ unsigned tile_a[TILE_M][TILE_K], tile_b[TILE_K][TILE_N];
+template<unsigned TILE_M, unsigned TILE_N, unsigned TILE_K, unsigned THREAD_M, unsigned THREAD_N>
+__global__ void sgemm_thread_tile_v0(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret) {
+    __shared__ float tile_a[TILE_M][TILE_K], tile_b[TILE_K][TILE_N];
     unsigned tx = threadIdx.x * THREAD_N, ty = threadIdx.y * THREAD_M,
             x = (blockDim.x * blockIdx.x + threadIdx.x) * THREAD_N, y =
                     (blockDim.y * blockIdx.y + threadIdx.y) * THREAD_M;
@@ -156,6 +156,77 @@ __global__ void sgemm_thread_tile(unsigned M, unsigned K, unsigned N, float *a, 
     for (unsigned i = 0; i < THREAD_M; ++i) {
         for (unsigned j = 0; j < THREAD_N; j++) {
             ret[(y + i) * N + x + j] = ret_tile[i][j];
+        }
+    }
+}
+
+/**
+ *
+ * @tparam BLOCK_M blockDim.y
+ * @tparam BLOCK_N blockDim.x
+ * @tparam TILE_K K方向取共享内存TILE尺寸
+ * @tparam THREAD_M 寄存器TILE
+ * @tparam THREAD_N 寄存器TILE
+ * @tparam WARP_CIRCLE_LOG $log_2(warp_size/THREAD_N)$，
+ * 同warp线程访问b矩阵同一行会bank conflict，如THREAD_N=2时，访问bank序列为0,2,...,30,0,2,...,30，加个thread tile内x方向的offset=tx/warp_circle
+ */
+template<unsigned BLOCK_M, unsigned BLOCK_N,
+    unsigned TILE_K,
+    unsigned THREAD_M, unsigned THREAD_N, unsigned
+    WARP_CIRCLE_LOG>
+__global__ void sgemm_thread_tile_v1(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret) {
+    constexpr unsigned TILE_M = BLOCK_M * THREAD_M, TILE_N = BLOCK_N * THREAD_N;
+    __shared__ float tile_a[TILE_M][TILE_K], tile_b[TILE_K][TILE_N];
+    unsigned tx = threadIdx.x, ty = threadIdx.y,
+            x = blockDim.x * blockIdx.x + threadIdx.x, y = blockDim.y * blockIdx.y + threadIdx.y;
+    // unsigned warp_circle = CEIL(warpSize, THREAD_N);
+    float ret_tile[THREAD_M][THREAD_N] = {0.0f};
+
+    for (unsigned k = 0; k < K; k += TILE_K) {
+        // 填充共享内存，strip loop
+        for (unsigned i = ty; i < TILE_M; i += blockDim.y) {
+            for (unsigned j = tx; j < TILE_K; j += blockDim.x) {
+                tile_a[i][j] = a[(i + blockIdx.y * TILE_M) * K + (j + k)];
+            }
+        }
+        for (unsigned i = ty; i < TILE_K; i += blockDim.y) {
+            for (unsigned j = tx; j < TILE_N; j += blockDim.x) {
+                tile_b[i][j] = b[(i + k) * N + (j + blockIdx.x * TILE_N)];
+            }
+        }
+        __syncthreads();
+        // 填充寄存器
+        float thread_tile_a[THREAD_M][TILE_K] = {0.0f}, thread_tile_b[TILE_K][THREAD_N] = {0.0f};
+        for (unsigned i = 0; i < THREAD_M; ++i) {
+            for (unsigned j = 0; j < TILE_K; ++j) {
+                thread_tile_a[i][j] = tile_a[ty * THREAD_M + i][j];
+            }
+        }
+        // 一个线程x方向负责THREAD_N个元素，读共享内存会bank_conflict
+        // 线程[0~warp_circle)为一组不重复bank，然后下一组重复bank
+        const unsigned offset = ty >> WARP_CIRCLE_LOG;
+        for (unsigned i = 0; i < TILE_K; ++i) {
+            for (unsigned j = 0; j < THREAD_N; ++j) {
+                // warp错开
+                // offset=ty/warp_circle, j_offset=(j_offset)%thread_n
+                unsigned j_offset = j + offset ^ THREAD_N - 1;
+                thread_tile_b[i][j_offset] = tile_b[i][tx * THREAD_N + j_offset];
+                // thread_tile_b[i][j] = tile_b[i][tx * THREAD_N + j];
+            }
+        }
+        // 计算结果
+        for (unsigned i = 0; i < THREAD_M; ++i) {
+            for (unsigned j = 0; j < THREAD_N; j++) {
+                for (unsigned tk = 0; tk < TILE_K; ++tk) {
+                    ret_tile[i][j] += thread_tile_a[i][tk] * thread_tile_b[tk][j];
+                }
+            }
+        }
+        __syncthreads();
+    }
+    for (unsigned i = 0; i < THREAD_M; ++i) {
+        for (unsigned j = 0; j < THREAD_N; j++) {
+            ret[(y * THREAD_M + i) * N + x * THREAD_N + j] = ret_tile[i][j];
         }
     }
 }
