@@ -43,3 +43,9 @@
 不过想到可能还有coalesce等问题，准备再写个优化点版本，总之v0版本直觉就有很多问题，不知道为什么一直超越不了。
 
 v0问题一是读全局内存，每个线程是读对应2*2的thread tile，按理说warp就没coalesce；二是访问tile b也是有bank conflict，比如第一轮，线程\[0\]\[0~15\]和\[1\]\[0~15\]同属一个warp，但是bank序列相同没散开。
+
+2025/11/9
+
+今天优化最后一版sgemm，v2，利用warpIdx和laneIdx遍历访问global memory，保证coalesce，然后padding解决bank conflict，结果是终于比v0强一点点了。
+
+前几天想通过offset手段解决bank conflict，结果耽误了好久啊。
