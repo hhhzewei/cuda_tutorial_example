@@ -34,9 +34,15 @@ int main() {
     call_sgemm_thread_tile_v0(M, K, N, a, b, ret);
     std::cout << "sgemm thread tile v0 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call sgemm thread tile v1 kernel
-    call_sgemm_thread_tile_v1(M, K, N, a, b, ret);
-    std::cout << "sgemm thread tile v1 result:" << *ret << ", error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
-    // // call cublast sgemm
+    call_sgemm_thread_tile_v1<8, 32, 32, 2, 2, 4>(M, K, N, a, b, ret);
+    std::cout << "call sgemm thread tile v1 8*32 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
+    // call sgemm thread tile v1 kernel
+    call_sgemm_thread_tile_v1<16, 16, 32, 2, 2, 4>(M, K, N, a, b, ret);
+    std::cout << "call sgemm thread tile v1 16*16 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
+    // call sgemm thread tile v2 kernel
+    call_sgemm_thread_tile_v2(M, K, N, a, b, ret);
+    std::cout << "call sgemm thread tile v2 padding error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
+    // call cublast sgemm
     call_sgemm_cublas(M, K, N, a, b, ret);
     // host free
     free(a);

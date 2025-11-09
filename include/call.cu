@@ -207,30 +207,6 @@ void call_sgemm_thread_tile_v0(unsigned M, unsigned K, unsigned N, float *a, flo
     batch_free({dev_a, dev_b, dev_ret});
 }
 
-void call_sgemm_thread_tile_v1(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret) {
-    // device memory
-    float *dev_a, *dev_b, *dev_ret;
-    prepare_sgemm(M, K, N, a, b, dev_a, dev_b, dev_ret);
-    // kernel
-    constexpr unsigned warp_size = 32,
-            block_N = warp_size, block_M = 8,
-            tile_k = warp_size,
-            thread_m = 2, thread_n = 2,
-            warp_circe_log2 = 4;
-    dim3 blockDim(block_N, block_M),
-            gridDim(CEIL(N, block_N * thread_n), CEIL(M, block_M * thread_m));
-    sgemm_thread_tile_v1<block_M, block_N,
-        tile_k,
-        thread_m, thread_n,
-        warp_circe_log2><<<gridDim,blockDim>>>(
-        M, K, N, dev_a, dev_b, dev_ret);
-    check_error(cudaGetLastError());
-    check_error(cudaDeviceSynchronize());
-    // copy output
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
-    // cuda free
-    batch_free({dev_a, dev_b, dev_ret});
-}
 
 void call_sgemm_cublas(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret) {
     // device memory
