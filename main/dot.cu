@@ -8,7 +8,7 @@
 #include "kernel.h"
 #include "check.h"
 
-int main(void) {
+int main() {
     constexpr unsigned N = 1 << 20;
     // host memory
     float *a = (float *) malloc(N * sizeof(float)), *b = (float *) malloc(N * sizeof(float)), *ret = (float *)
@@ -28,8 +28,11 @@ int main(void) {
     call_dot_shared_external<blockNum, threadNum>(N, a, b, ret);
     std::cout << "dot shared external error: " << dot_error(N, a, b, ret) << std::endl;
     // call dot shared warp shuffle kernel
-    call_dot_warp_shuffle<blockNum, threadNum>(N, a, b, ret);
-    std::cout << "dot shared warp shuffle error: " << *ret << " " << dot_error(N, a, b, ret) << std::endl;
+    call_dot_warp_shuffle_v0<blockNum, threadNum>(N, a, b, ret);
+    std::cout << "dot shared warp shuffle v0 error: " << *ret << " " << dot_error(N, a, b, ret) << std::endl;
+    // call dot shared warp shuffle kernel
+    call_dot_warp_shuffle_v1<blockNum, threadNum>(N, a, b, ret);
+    std::cout << "dot shared warp shuffle v1 error: " << *ret << " " << dot_error(N, a, b, ret) << std::endl;
     // call dot cublas
     call_dot_cublas(N, a, b, ret);
     // host free

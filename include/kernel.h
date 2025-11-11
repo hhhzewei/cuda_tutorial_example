@@ -23,6 +23,22 @@ __global__ void add_float4(unsigned N, float *a, float *b, float *ret);
 // dot
 __global__ void dot(unsigned N, float *a, float *b, float *ret);
 
+template<unsigned WARP_SIZE>
+__device__ __forceinline__ void reduce_add_v0(float &value) {
+#pragma unroll
+    for (unsigned offset = WARP_SIZE >> 1; offset > 0; offset >>= 1) {
+        value += __shfl_down_sync(0xffffffff, value, offset);
+    }
+}
+
+template<unsigned WARP_SIZE>
+__device__ __forceinline__ void reduce_add_v1(float &value) {
+#pragma unroll
+    for (int offset = WARP_SIZE >> 1; offset > 0; offset >>= 1) {
+        value += __shfl_xor_sync(0xffffffff, value, offset);
+    }
+}
+
 template<const int BLOCK_DIM>
 __global__ void dot_share(unsigned N, float *a, float *b, float *ret) {
     __shared__ float tmp[BLOCK_DIM];
@@ -51,9 +67,58 @@ __global__ void dot_shared_external(unsigned N, float *a, float *b, float *ret);
 
 /**
  *
- * blockDim <= warpSize * warpSize
+ * warp_num = blockDim / warpSize <=  * warpSize
  */
-__global__ void dot_warp_shuffle(unsigned N, float *a, float *b, float *ret);
+template<unsigned WARP_NUM, unsigned WARP_SIZE = 32>
+__global__ void dot_warp_shuffle_v0(unsigned N, float *a, float *b, float *ret) {
+    __shared__ float tmp[WARP_NUM];
+    unsigned idx = threadIdx.x + blockDim.x * blockIdx.x, strip = gridDim.x * blockDim.x;
+    unsigned warpNum = CEIL(blockDim.x, warpSize), warpIdx = threadIdx.x / warpSize, laneIdx =
+            threadIdx.x - warpIdx * warpSize;
+    float value = 0.0f;
+    for (unsigned i = idx; i < N; i += strip) {
+        value += a[i] * b[i];
+    }
+    __syncwarp();
+    reduce_add_v0<WARP_SIZE>(value);
+    if (laneIdx == 0) {
+        tmp[warpIdx] = value;
+    }
+    __syncthreads();
+    if (warpIdx == 0) {
+        value = laneIdx < warpNum ? tmp[laneIdx] : 0.0f;
+        reduce_add_v0<WARP_SIZE>(value);
+        if (laneIdx == 0) {
+            atomicAdd(ret, value);
+        }
+    }
+}
+
+template<unsigned WARP_NUM, unsigned WARP_SIZE = 32>
+__global__ void dot_warp_shuffle_v1(unsigned N, float *a, float *b, float *ret) {
+    __shared__ float tmp[WARP_NUM];
+    unsigned idx = threadIdx.x + blockDim.x * blockIdx.x, strip = gridDim.x * blockDim.x;
+    unsigned warpNum = CEIL(blockDim.x, warpSize), warpIdx = threadIdx.x / warpSize, laneIdx =
+            threadIdx.x - warpIdx * warpSize;
+    float value = 0.0f;
+    for (unsigned i = idx; i < N; i += strip) {
+        value += a[i] * b[i];
+    }
+    __syncwarp();
+    reduce_add_v1<WARP_SIZE>(value);
+    if (laneIdx == 0) {
+        tmp[warpIdx] = value;
+    }
+    __syncthreads();
+    if (warpIdx == 0) {
+        value = laneIdx < warpNum ? tmp[laneIdx] : 0.0f;
+        reduce_add_v1<WARP_SIZE>(value);
+        if (laneIdx == 0) {
+            atomicAdd(ret, value);
+        }
+    }
+}
+
 
 // transport
 __global__ void transpose_naive(unsigned M, unsigned N, float *input, float *output);

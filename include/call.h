@@ -99,13 +99,29 @@ void call_dot_shared_external(unsigned N, float *a, float *b, float *ret) {
 }
 
 template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
-void call_dot_warp_shuffle(unsigned N, float *a, float *b, float *ret) {
+void call_dot_warp_shuffle_v0(unsigned N, float *a, float *b, float *ret) {
     // device memory
     float *dev_a, *dev_b, *dev_ret;
     prepare_reduce(N, a, b, dev_a, dev_b, dev_ret);
     // kernel
     constexpr unsigned warp_num = CEIL(THREAD_NUM, 32);
-    dot_warp_shuffle<<<BLOCK_NUM, THREAD_NUM, warp_num * sizeof(float)>>>(N, dev_a, dev_b, dev_ret);
+    dot_warp_shuffle_v0<warp_num><<<BLOCK_NUM, THREAD_NUM>>>(N, dev_a, dev_b, dev_ret);
+    check_error(cudaGetLastError());
+    check_error(cudaDeviceSynchronize());
+    // copy output
+    cudaMemcpy(ret, dev_ret, sizeof(float), cudaMemcpyDeviceToHost);
+    // cuda free
+    batch_free({dev_a, dev_b, dev_ret});
+}
+
+template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
+void call_dot_warp_shuffle_v1(unsigned N, float *a, float *b, float *ret) {
+    // device memory
+    float *dev_a, *dev_b, *dev_ret;
+    prepare_reduce(N, a, b, dev_a, dev_b, dev_ret);
+    // kernel
+    constexpr unsigned warp_num = CEIL(THREAD_NUM, 32);
+    dot_warp_shuffle_v1<warp_num><<<BLOCK_NUM, THREAD_NUM>>>(N, dev_a, dev_b, dev_ret);
     check_error(cudaGetLastError());
     check_error(cudaDeviceSynchronize());
     // copy output
@@ -153,8 +169,8 @@ void call_sgemm_thread_tile_v1(unsigned M, unsigned K, unsigned N, float *a, flo
     batch_free({dev_a, dev_b, dev_ret});
 }
 
-template<unsigned TILE_M=32, unsigned TILE_N=32, unsigned TILE_K=32,
-    unsigned THREAD_M=2, unsigned THREAD_N=2>
+template<unsigned TILE_M = 32, unsigned TILE_N = 32, unsigned TILE_K = 32,
+    unsigned THREAD_M = 2, unsigned THREAD_N = 2>
 void call_sgemm_thread_tile_v2(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret) {
     // device memory
     float *dev_a, *dev_b, *dev_ret;

@@ -67,40 +67,6 @@ __global__ void dot_shared_external(unsigned N, float *a, float *b, float *ret) 
     }
 }
 
-__global__ void dot_warp_shuffle(unsigned N, float *a, float *b, float *ret) {
-    extern __shared__ float tmp[];
-    unsigned idx = threadIdx.x + blockDim.x * blockIdx.x, strip = gridDim.x * blockDim.x;
-    unsigned warpNum = CEIL(blockDim.x, warpSize), warpIdx = threadIdx.x / warpSize, laneIdx =
-            threadIdx.x - warpIdx * warpSize;
-    if (laneIdx == 0) {
-        tmp[warpIdx] = 0.0f;
-    }
-    float value = 0.0f;
-    for (unsigned i = idx; i < N; i += strip) {
-        value += a[i] * b[i];
-    }
-    __syncwarp();
-    unsigned range = warpSize >> 1;
-    while (range) {
-        value += __shfl_down_sync(0xffffffff, value, range);
-        range >>= 1;
-    }
-    if (laneIdx == 0) {
-        tmp[warpIdx] = value;
-    }
-    __syncthreads();
-    if (warpIdx == 0) {
-        range = warpNum >> 1;
-        value = laneIdx < warpNum ? tmp[laneIdx] : 0.0f;
-        while (range) {
-            value += __shfl_down_sync(0xffffffff, value, range);
-            range >>= 1;
-        }
-        if (laneIdx == 0) {
-            atomicAdd(ret, value);
-        }
-    }
-}
 
 __global__ void transpose_naive(unsigned m, unsigned N, float *input, float *output) {
     unsigned x = blockDim.x * blockIdx.x + threadIdx.x, y = blockDim.y * blockIdx.y + threadIdx.y;
