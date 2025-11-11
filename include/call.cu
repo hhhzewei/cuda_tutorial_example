@@ -137,17 +137,19 @@ void call_transpose_cubalas(unsigned M, unsigned N, float *input, float *output)
     // kernel
     cublasHandle_t handle{};
     cublasCreate(&handle);
-    float alpha = 1.0f;
-    float beta = 0.0f;
+    float alpha = 1.0f, beta = 0.0f;
+    float *dev_tmp;
+    cudaMalloc(&dev_tmp, SIZE);
+    cudaMemcpy(dev_tmp, input, SIZE, cudaMemcpyHostToDevice);
     cublasSgeam(handle,
-                CUBLAS_OP_T, // 转置 A
-                CUBLAS_OP_N, // B 不参与
-                N, M, // 输出矩阵尺寸 (原来是 m x n, 转置后 n x m)
+                CUBLAS_OP_T,
+                CUBLAS_OP_N,
+                M, N,
                 &alpha,
-                input, M, // lda = 原矩阵的行数 m
+                dev_input, N,
                 &beta,
-                nullptr, N, // B 不参与，加 beta=0 就行
-                output, N); // 输出矩阵 C, ldc = n
+                dev_tmp, M,
+                dev_output, M);
     check_error(cudaGetLastError());
     check_error(cudaDeviceSynchronize());
     // copy output
