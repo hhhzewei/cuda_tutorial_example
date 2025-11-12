@@ -2,10 +2,8 @@
 // Created by hzw on 2025/10/25.
 //
 // Kernel function to add the elements of two arrays
-#include <cstdio>
+#include "kernel.h"
 
-#define FLOAT4(x) (*((float4*)(&x)))
-#define CEIL(a,b) ((a+b-1)/b)
 
 __global__ void add(unsigned n, float *x, float *y, float *ret) {
     unsigned int strip = gridDim.x * blockDim.x;

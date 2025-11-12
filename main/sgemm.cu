@@ -9,7 +9,7 @@
 #include "check.h"
 
 int main() {
-    constexpr unsigned M = 1 << 10, N = 1 << 11, K = 1 << 12;
+    constexpr unsigned M = 1 << 11, N = 1 << 11, K = 1 << 12;
     // host malloc
     float *a = (float *) malloc(M * K * sizeof(float)),
             *b = (float *) malloc(K * N * sizeof(float)),
@@ -36,12 +36,12 @@ int main() {
     // call sgemm thread tile v1 kernel
     call_sgemm_thread_tile_v1<8, 32, 32, 2, 2, 4>(M, K, N, a, b, ret);
     std::cout << "call sgemm thread tile v1 8*32 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
-    // call sgemm thread tile v1 kernel
-    call_sgemm_thread_tile_v1<16, 16, 32, 2, 2, 4>(M, K, N, a, b, ret);
-    std::cout << "call sgemm thread tile v1 16*16 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call sgemm thread tile v2 kernel
     call_sgemm_thread_tile_v2(M, K, N, a, b, ret);
     std::cout << "call sgemm thread tile v2 padding error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
+    // call sgemm thread tile v3 kernel
+    call_sgemm_thread_tile_v3(M, K, N, a, b, ret);
+    std::cout << "call sgemm thread tile v3 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call cublast sgemm
     call_sgemm_cublas(M, K, N, a, b, ret);
     // host free
