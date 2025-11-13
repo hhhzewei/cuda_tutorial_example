@@ -210,6 +210,26 @@ void call_sgemm_thread_tile_v3(unsigned M, unsigned K, unsigned N, float *a, flo
     batch_free({dev_a, dev_b, dev_ret});
 }
 
+template<unsigned TILE_M = 128, unsigned TILE_K = 8, unsigned TILE_N = 128,
+    unsigned THREAD_M = 8, unsigned THREAD_N = 8>
+void call_sgemm_thread_tile_v4(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret) {
+    // device memory
+    float *dev_a, *dev_b, *dev_ret;
+    prepare_sgemm(M, K, N, a, b, dev_a, dev_b, dev_ret);
+    // kernel
+    constexpr unsigned BLOCK_N = TILE_M / THREAD_M, BLOCK_M = TILE_N / THREAD_N;
+    dim3 blockDim(BLOCK_N, BLOCK_M),
+            gridDim(CEIL(N, BLOCK_N * THREAD_N), CEIL(M, BLOCK_M * THREAD_M));
+    sgemm_thread_tile_v4<TILE_M, TILE_K, TILE_N,
+        THREAD_M, THREAD_N><<<gridDim,blockDim>>>(M, K, N, dev_a, dev_b, dev_ret);
+    check_error(cudaGetLastError());
+    check_error(cudaDeviceSynchronize());
+    // copy output
+    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
+    // cuda free
+    batch_free({dev_a, dev_b, dev_ret});
+}
+
 
 void call_sgemm_cublas(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret);
 #endif //CUDA_TUTORIAL_EXAMPLE_CALL_H

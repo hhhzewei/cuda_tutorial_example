@@ -42,6 +42,9 @@ int main() {
     // call sgemm thread tile v3 kernel
     call_sgemm_thread_tile_v3(M, K, N, a, b, ret);
     std::cout << "call sgemm thread tile v3 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
+    // call sgemm thread tile v4 kernel
+    call_sgemm_thread_tile_v4(M, K, N, a, b, ret);
+    std::cout << "call sgemm thread tile v4 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call cublast sgemm
     call_sgemm_cublas(M, K, N, a, b, ret);
     // host free
