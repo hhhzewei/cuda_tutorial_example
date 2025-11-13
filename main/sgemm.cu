@@ -15,13 +15,13 @@ int main() {
             *b = (float *) malloc(K * N * sizeof(float)),
             *ret = (float *) malloc(M * N * sizeof(float));
     for (unsigned i = 0; i < M; ++i) {
-        for (int k = 0; k < K; ++k) {
-            a[i * K + k] = 1.0f;
+        for (unsigned k = 0; k < K; ++k) {
+            a[i * K + k] = 0.1f;
         }
     }
     for (unsigned k = 0; k < K; ++k) {
         for (int j = 0; j < N; ++j) {
-            b[k * N + j] = 1.0f;
+            b[k * N + j] = 0.2f;
         }
     }
     // call sgemm naive kernel
@@ -45,6 +45,9 @@ int main() {
     // call sgemm thread tile v4 kernel
     call_sgemm_thread_tile_v4(M, K, N, a, b, ret);
     std::cout << "call sgemm thread tile v4 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
+    // call sgemm thread tile v5 kernel
+    call_sgemm_thread_tile_v5(M, K, N, a, b, ret);
+    std::cout << "call sgemm thread tile v5 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call cublast sgemm
     call_sgemm_cublas(M, K, N, a, b, ret);
     // host free
