@@ -32,7 +32,8 @@ int main() {
     std::cout << "dot shared warp shuffle v0 error: " << *ret << " " << dot_error(N, a, b, ret) << std::endl;
     // call dot shared warp shuffle kernel
     call_dot_warp_shuffle_v1<blockNum, threadNum>(N, a, b, ret);
-    std::cout << "dot shared warp shuffle v1 error: " << *ret << " " << dot_error(N, a, b, ret) << std::endl;
+    std::cout << "dot shared warp shuffle v1 result: " << *ret
+            << " error: " << " " << dot_error(N, a, b, ret) <<std::endl;
     // call dot cublas
     call_dot_cublas(N, a, b, ret);
     // host free
