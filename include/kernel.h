@@ -125,6 +125,24 @@ __global__ void dot_warp_shuffle_v1(unsigned N, float *a, float *b, float *ret) 
 __global__ void transpose_naive(unsigned M, unsigned N, float *input, float *output);
 
 template<unsigned WARP_SIZE>
+__global__ void transpose_shared(unsigned M, unsigned N, float *input, float *output) {
+    // padding
+    __shared__ float tile[WARP_SIZE][WARP_SIZE];
+    const unsigned x = blockIdx.x * blockDim.x + threadIdx.x,
+            y = blockIdx.y * blockDim.y + threadIdx.y,
+            tx = threadIdx.x,
+            ty = threadIdx.y;
+    if (x < N && y < M) {
+        tile[ty][tx] = input[y * N + x];
+    }
+    __syncthreads();
+    unsigned x1 = blockDim.x * blockIdx.x + ty, y1 = blockDim.y * blockIdx.y + tx;
+    if (x1 < N && y1 < M) {
+        output[x1 * M + y1] = tile[tx][ty];
+    }
+}
+
+template<unsigned WARP_SIZE>
 __global__ void transpose_padding(unsigned M, unsigned N, float *input, float *output) {
     // padding
     __shared__ float tile[WARP_SIZE][WARP_SIZE + 1];

@@ -134,6 +134,8 @@ void call_dot_cublas(unsigned N, float *a, float *b, float *ret);
 
 void call_transpose_naive(unsigned M, unsigned N, float *input, float *output);
 
+void call_transpose_shared(unsigned M, unsigned N, float *input, float *output);
+
 void call_transpose_padding(unsigned M, unsigned N, float *input, float *output);
 
 void call_transpose_swizzle(unsigned M, unsigned N, float *input, float *output);

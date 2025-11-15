@@ -95,6 +95,23 @@ void call_transpose_naive(unsigned M, unsigned N, float *input, float *output) {
 }
 
 
+void call_transpose_shared(unsigned M, unsigned N, float *input, float *output) {
+    // cuda malloc
+    float *dev_input, *dev_output;
+    unsigned SIZE = M * N * sizeof(float);
+    prepare_transpose(M, N, input, dev_input, dev_output);
+    // kernel
+    constexpr unsigned warp_size = 32;
+    dim3 blockDim(warp_size, warp_size), gridDim(CEIL(N, warp_size),CEIL(M, warp_size));
+    transpose_shared<warp_size><<<gridDim,blockDim>>>(M, N, dev_input, dev_output);
+    check_error(cudaGetLastError());
+    check_error(cudaDeviceSynchronize());
+    // copy output
+    cudaMemcpy(output, dev_output, SIZE, cudaMemcpyDeviceToHost);
+    // cuda free
+    batch_free({dev_input, dev_output});
+}
+
 void call_transpose_padding(unsigned M, unsigned N, float *input, float *output) {
     // cuda malloc
     float *dev_input, *dev_output;

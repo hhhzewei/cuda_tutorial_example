@@ -22,6 +22,9 @@ int main() {
     // call transpose naive kernel
     call_transpose_naive(M, N, input, output);
     std::cout << "transpose naive error: " << transpose_error(M, N, input, output) << std::endl;
+    // call transpose sahred kernel
+    call_transpose_shared(M, N, input, output);
+    std::cout << "transpose padding error: " << transpose_error(M, N, input, output) << std::endl;
     // call transpose padding kernel
     call_transpose_padding(M, N, input, output);
     std::cout << "transpose padding error: " << transpose_error(M, N, input, output) << std::endl;
