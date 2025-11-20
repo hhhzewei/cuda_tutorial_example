@@ -5,9 +5,12 @@
 #ifndef CUDA_TUTORIAL_EXAMPLE_KERNEL_H
 #define CUDA_TUTORIAL_EXAMPLE_KERNEL_H
 
+#include <cstdio>
+#include <cuda_pipeline.h>
+
 #define CEIL(a,b) (((a)+(b)-1)/(b))
 #define FLOAT4(x) (*((float4*)(&x)))
-#define TWO_D_2_ONE_D(a,i,j,step) (a)[(i)*(step)+(j)]
+#define TWO_D_2_ONE_D(a,i,j,step) ((a)[(i)*(step)+(j)])
 
 // add
 __global__ void add(unsigned n, float *a, float *b, float *ret);
@@ -126,7 +129,6 @@ __global__ void transpose_naive(unsigned M, unsigned N, float *input, float *out
 
 template<unsigned WARP_SIZE>
 __global__ void transpose_shared(unsigned M, unsigned N, float *input, float *output) {
-    // padding
     __shared__ float tile[WARP_SIZE][WARP_SIZE];
     const unsigned x = blockIdx.x * blockDim.x + threadIdx.x,
             y = blockIdx.y * blockDim.y + threadIdx.y,
@@ -257,9 +259,11 @@ __global__ void sgemm_thread_tile_v0(unsigned M, unsigned K, unsigned N, float *
 }
 
 /**
+ * 2D-strip-loop读全局内存
+ *
  * 同warp线程访问b矩阵同一行会bank conflict，如THREAD_N=2时，访问bank序列为0,2,...,30,0,2,...,30
  *
- * 添加thread tile内x方向的offset=tx/warp_circle
+ * 添加thread tile内x方向的offset=tx/warp_circle，swizzle错开bank
  *
  * 惊天负优化
  *
@@ -350,6 +354,8 @@ __global__ void sgemm_thread_tile_v1(unsigned M, unsigned K, unsigned N, float *
 
 
 /**
+ * 2D-strip-loop读全局内存
+ *
  * padding 解决bank conflict
  *
  * @tparam TILE_M TILE尺寸，TILE_M==BLOCK_M*THREAD_M
@@ -425,7 +431,7 @@ __global__ void sgemm_thread_tile_v2(unsigned M, unsigned K, unsigned N, float *
 /**
  * block内线程按顺序取global memory的float4
  *
- * 每个线程负责元素ret_tile[ty+i*BLOCK_M][tx+j*BLOCK_M]，而不是ret_tile[ty*THREAD_M+i][tx*THREAD_M+j]，例如
+ * 每个线程负责计算元素ret_tile[ty+i*BLOCK_M][tx+j*BLOCK_M]，而不是ret_tile[ty*THREAD_M+i][tx*THREAD_M+j]，例如
  *
  * x . x .
  *
@@ -510,9 +516,7 @@ __global__ void sgemm_thread_tile_v3(unsigned M, unsigned K, unsigned N, float *
 }
 
 /**
- * block内线程按顺序取global memory的float4
- *
- * 每个线程负责元素ret_tile[ty+i*BLOCK_M][tx+j*BLOCK_M]，而不是ret_tile[ty*THREAD_M+i][tx*THREAD_M+j]，例如
+ * 在v3基础上
  *
  * tile_a在shared memory转置排列，否则第一轮所有线程都读tile_a第一列，有bank conflict
  *
@@ -588,11 +592,9 @@ __global__ void sgemm_thread_tile_v4(unsigned M, unsigned K, unsigned N, float *
 }
 
 /**
- * block内线程按顺序取global memory的float4
+ * 在v4基础上，
  *
- * 每个线程负责元素ret_tile[ty+i*BLOCK_M][tx+j*BLOCK_M]，而不是ret_tile[ty*THREAD_M+i][tx*THREAD_M+j]，例如
- *
- * tile_a在shared memory转置排列，否则第一轮所有线程都读tile_a第一列，有bank conflict
+ * 使用双缓冲，隔离每轮循环load的数据和用于计算的数据，减少synchronize
  *
  * @tparam TILE_M TILE尺寸，TILE_M==BLOCK_M*THREAD_M==TILE_N
  * @tparam TILE_K TILE尺寸，TILE_K*TILE_M==TILE_K*TILE_N==4*BLOCK_M*BLOCK_N
@@ -703,5 +705,140 @@ __global__ void sgemm_thread_tile_v5(unsigned M, unsigned K, unsigned N, float *
     }
 }
 
+
+/**
+ * 在v5基础上，
+ *
+ * 异步搬运全局内存数据到共享内存，实现真正的compute和load同时
+ *
+ * @tparam TILE_M TILE尺寸，TILE_M==BLOCK_M*THREAD_M==TILE_N
+ * @tparam TILE_K TILE尺寸
+ * @tparam TILE_N TILE尺寸，TILE_N==BLOCK_N*THREAD_N==TILE_M
+ * @tparam THREAD_M
+ * @tparam THREAD_N
+ */
+template<unsigned TILE_M = 128, unsigned TILE_K = 8, unsigned TILE_N = 128,
+    unsigned THREAD_M = 8, unsigned THREAD_N = 8>
+__global__ void sgemm_thread_tile_v6(unsigned M, unsigned K, unsigned N, float *a, float *b, float *ret) {
+    __shared__ float tile_a[2][TILE_K][TILE_M], tile_b[2][TILE_K][TILE_N];
+    unsigned tx = threadIdx.x, ty = threadIdx.y, tIdx = ty * blockDim.x + tx;
+    unsigned strip = blockDim.x * blockDim.y;
+    // async load firstly
+#pragma unroll
+    for (unsigned idx = tIdx; idx < TILE_M * TILE_K; idx += strip) {
+        unsigned shared_a_y = idx / TILE_K, shared_a_x = idx % TILE_K,
+                global_a_y = blockIdx.y * TILE_M + shared_a_y;
+        // 转置
+        __pipeline_memcpy_async(&tile_a[0][shared_a_x][shared_a_y],
+                                &TWO_D_2_ONE_D(a, global_a_y, shared_a_x, K),
+                                sizeof(float));
+    }
+#pragma unroll
+    for (unsigned idx = tIdx; idx < TILE_K * TILE_N; idx += strip) {
+        unsigned shared_b_y = idx / TILE_N, shared_b_x = idx % TILE_N,
+                global_b_x = blockIdx.x * TILE_N + shared_b_x;
+        __pipeline_memcpy_async(&tile_b[0][shared_b_y][shared_b_x],
+                                &TWO_D_2_ONE_D(b, shared_b_y, global_b_x, N),
+                                sizeof(float));
+    }
+    __pipeline_commit();
+    __pipeline_wait_prior(0);
+    __syncthreads();
+    float ret_tile[THREAD_M][THREAD_N] = {0.0f};
+    float thread_tile_a[THREAD_M][TILE_K] = {0.0f}, thread_tile_b[TILE_K][THREAD_N] = {0.0f};
+    bool mark = false;
+    for (unsigned k = TILE_K; k < K; k += TILE_K, mark = !mark) {
+        // async load
+#pragma unroll
+        for (unsigned idx = tIdx; idx < TILE_M * TILE_K; idx += strip) {
+            unsigned shared_a_y = idx / TILE_K, shared_a_x = idx % TILE_K,
+                    global_a_y = blockIdx.y * TILE_M + shared_a_y;
+            // 转置
+            __pipeline_memcpy_async(&tile_a[!mark][shared_a_x][shared_a_y],
+                                    &TWO_D_2_ONE_D(a, global_a_y, k + shared_a_x, K),
+                                    sizeof(float));
+        }
+#pragma unroll
+        for (unsigned idx = tIdx; idx < TILE_K * TILE_N; idx += strip) {
+            unsigned shared_b_y = idx / TILE_N, shared_b_x = idx % TILE_N,
+                    global_b_x = blockIdx.x * TILE_N + shared_b_x;
+            __pipeline_memcpy_async(&tile_b[!mark][shared_b_y][shared_b_x],
+                                    &TWO_D_2_ONE_D(b, k + shared_b_y, global_b_x, N),
+                                    sizeof(float));
+        }
+        __pipeline_commit();
+        // 填充寄存器
+#pragma unroll
+        for (unsigned i = 0; i < THREAD_M; ++i) {
+#pragma unroll
+            for (unsigned j = 0; j < TILE_K; ++j) {
+                // thread_tile_a[i][j] = tile_a[ty + i * blockDim.y][j];
+                thread_tile_a[i][j] = tile_a[mark][j][ty + i * blockDim.y]; //转置
+            }
+        }
+#pragma unroll
+        for (unsigned i = 0; i < TILE_K; ++i) {
+#pragma unroll
+            for (unsigned j = 0; j < THREAD_N; ++j) {
+                thread_tile_b[i][j] = tile_b[mark][i][tx + j * blockDim.x];
+            }
+        }
+        // 计算结果
+#pragma unroll
+        for (unsigned i = 0; i < THREAD_M; ++i) {
+#pragma unroll
+            for (unsigned j = 0; j < THREAD_N; ++j) {
+#pragma unroll
+                for (unsigned tk = 0; tk < TILE_K; ++tk) {
+                    ret_tile[i][j] += thread_tile_a[i][tk] * thread_tile_b[tk][j];
+                }
+            }
+        }
+        __pipeline_wait_prior(0);
+        __syncthreads();
+    }
+    // 使用最后一次读取的数据
+    // 填充寄存器
+#pragma unroll
+    for (unsigned i = 0; i < THREAD_M; ++i) {
+#pragma unroll
+        for (unsigned j = 0; j < TILE_K; ++j) {
+            // thread_tile_a[i][j] = tile_a[ty + i * blockDim.y][j];
+            thread_tile_a[i][j] = tile_a[mark][j][ty + i * blockDim.y]; //转置
+        }
+    }
+#pragma unroll
+    for (unsigned i = 0; i < TILE_K; ++i) {
+#pragma unroll
+        for (unsigned j = 0; j < THREAD_N; ++j) {
+            thread_tile_b[i][j] = tile_b[mark][i][tx + j * blockDim.x];
+        }
+    }
+    // 计算结果
+#pragma unroll
+    for (unsigned i = 0; i < THREAD_M; ++i) {
+#pragma unroll
+        for (unsigned j = 0; j < THREAD_N; ++j) {
+#pragma unroll
+            for (unsigned tk = 0; tk < TILE_K; ++tk) {
+                ret_tile[i][j] += thread_tile_a[i][tk] * thread_tile_b[tk][j];
+            }
+        }
+    }
+    // 写回结果
+#pragma unroll
+    for (unsigned i = 0; i < THREAD_M; ++i) {
+#pragma unroll
+        for (unsigned j = 0; j < THREAD_N; ++j) {
+            TWO_D_2_ONE_D(ret,
+                          blockIdx.y * TILE_M + ty + i * blockDim.y,
+                          blockIdx.x * TILE_N + tx + j * blockDim.x,
+                          N) = ret_tile[i][j];
+        }
+    }
+}
+
+
+__global__ void test_address_offset();
 
 #endif // CUDA_TUTORIAL_EXAMPLE_KERNEL_H

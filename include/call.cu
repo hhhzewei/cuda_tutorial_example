@@ -34,12 +34,17 @@ void prepare_transpose(unsigned M, unsigned N, float *input, float *&dev_input, 
 
 void prepare_sgemm(unsigned M, unsigned K, unsigned N, float *a, float *b, float *&dev_a, float *&dev_b,
                    float *&dev_ret) {
-    cudaMalloc(&dev_a, M * K * sizeof(float));
-    cudaMalloc(&dev_b, N * K * sizeof(float));
-    cudaMalloc(&dev_ret, M * N * sizeof(float));
+    cudaStream_t stream_a, stream_b, stream_ret;
+    cudaStreamCreate(&stream_a);
+    cudaStreamCreate(&stream_b);
+    cudaStreamCreate(&stream_ret);
+    // 创建固定内存
+    cudaMallocAsync(&dev_a, M * K * sizeof(float), stream_a);
+    cudaMallocAsync(&dev_b, N * K * sizeof(float), stream_b);
+    cudaMallocAsync(&dev_ret, M * N * sizeof(float), stream_ret);
     // copy input
-    cudaMemcpy(dev_a, a, M * K * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_b, b, K * N * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpyAsync(dev_a, a, M * K * sizeof(float), cudaMemcpyHostToDevice, stream_a);
+    cudaMemcpyAsync(dev_b, b, K * N * sizeof(float), cudaMemcpyHostToDevice, stream_b);
 }
 
 void batch_free(std::initializer_list<float *> ptr_list) {
