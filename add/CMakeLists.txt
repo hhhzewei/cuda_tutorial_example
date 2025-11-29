@@ -1,7 +1,3 @@
-add_executable(add1 add1.cu ../include/kernel.cu ../include/check.cu)
-add_executable(add2 add2.cu ../include/kernel.cu ../include/check.cu)
-add_executable(add3 add3.cu ../include/kernel.cu ../include/check.cu)
-add_executable(add4 add4.cu ../include/kernel.cu ../include/check.cu)
-
-set_target_properties(add1 add2 add3 add4
-        PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+add_executable(add add.cu call.cu kernel.cu ../util/util.cu)
+set_target_properties(add PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+target_link_libraries(add PRIVATE cublas)

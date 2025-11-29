@@ -7,7 +7,7 @@ cmake .. > /dev/null 2>&1
 make
 
 ncu_execute(){
-  executable_path="./$1"
+  executable_path="./$1/$1"
   if [ -f "$executable_path" ]; then
 #    ncu  -o "$1" "$executable_path" # 显示概要信息
     ncu --set full -o "$1" "$executable_path" # 显示完整信息
