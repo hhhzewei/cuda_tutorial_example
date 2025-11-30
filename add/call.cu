@@ -27,5 +27,5 @@ void call_add_cublas(const unsigned N, const float *a, const float *b, float *re
     // copy output
     cudaMemcpy(ret, dev_ret, N * sizeof(float), cudaMemcpyDeviceToHost);
     // device free
-    batch_free({dev_a, dev_b, dev_ret});
+    batch_cuda_free({dev_a, dev_b, dev_ret});
 }

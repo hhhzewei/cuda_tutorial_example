@@ -675,16 +675,18 @@ __global__ void sgemm_thread_tile_v6(const unsigned K, const unsigned N, const f
 /**
  * 一维warp，每个warp处理16*16 tile
  *
+ * 读入shared转为half
+ *
  * @param K
  * @param N
  * @param a
  * @param b
  * @param ret
  */
-__global__ void sgemm_tensor_core_v0(unsigned K, unsigned N, const half *a, const half *b, float *ret);
+__global__ void sgemm_tensor_core_v0(unsigned K, unsigned N, const float *a, const float *b, float *ret);
 
 template<unsigned TILE_M, unsigned TILE_N>
-__global__ void sgemm_tensor_core_v1(const unsigned K, const unsigned N, const half *a, const half *b, float *ret) {
+__global__ void sgemm_tensor_core_v1(const unsigned K, const unsigned N, const float *a, const float *b, float *ret) {
     using namespace nvcuda;
     constexpr unsigned TILE_K = WMMA_TILE_K;
     // 双缓冲
@@ -698,12 +700,14 @@ __global__ void sgemm_tensor_core_v1(const unsigned K, const unsigned N, const h
 #pragma unroll
     for (unsigned i = threadId; i < TILE_M * TILE_K; i += threadNum) {
         const unsigned shared_a_i = i / TILE_K, shared_a_j = i % TILE_K;
-        tile_a[flag][shared_a_i][shared_a_j] = _2D_2_1D(a, blockIdx.y * TILE_M + shared_a_i, shared_a_j, K);
+        tile_a[flag][shared_a_i][shared_a_j] = __float2half(
+            _2D_2_1D(a, blockIdx.y * TILE_M + shared_a_i, shared_a_j, K));
     }
 #pragma unroll
     for (unsigned i = threadId; i < TILE_N * TILE_K; i += threadNum) {
         const unsigned shared_b_i = i / TILE_N, shared_b_j = i % TILE_N;
-        tile_b[flag][shared_b_i][shared_b_j] = _2D_2_1D(b, shared_b_i, blockIdx.x * TILE_N + shared_b_j, N);
+        tile_b[flag][shared_b_i][shared_b_j] = __float2half(
+            _2D_2_1D(b, shared_b_i, blockIdx.x * TILE_N + shared_b_j, N));
     }
     __syncthreads();
     wmma::fragment<wmma::matrix_a,WMMA_TILE_M,WMMA_TILE_N,WMMA_TILE_K, half, wmma::row_major> frag_a;
@@ -719,12 +723,14 @@ __global__ void sgemm_tensor_core_v1(const unsigned K, const unsigned N, const h
 #pragma unroll
         for (unsigned i = threadId; i < TILE_M * TILE_K; i += threadNum) {
             const unsigned shared_a_i = i / TILE_K, shared_a_j = i % TILE_K;
-            tile_a[flag][shared_a_i][shared_a_j] = _2D_2_1D(a, blockIdx.y * TILE_M + shared_a_i, k + shared_a_j, K);
+            tile_a[flag][shared_a_i][shared_a_j] = __half2float(
+                _2D_2_1D(a, blockIdx.y * TILE_M + shared_a_i, k + shared_a_j, K));
         }
 #pragma unroll
         for (unsigned i = threadId; i < TILE_N * TILE_K; i += threadNum) {
             const unsigned shared_b_i = i / TILE_N, shared_b_j = i % TILE_N;
-            tile_b[flag][shared_b_i][shared_b_j] = _2D_2_1D(b, k + shared_b_i, blockIdx.x * TILE_N + shared_b_j, N);
+            tile_b[flag][shared_b_i][shared_b_j] = __half2float(
+                _2D_2_1D(b, k + shared_b_i, blockIdx.x * TILE_N + shared_b_j, N));
         }
         __syncthreads();
     }

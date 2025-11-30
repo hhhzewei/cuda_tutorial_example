@@ -27,7 +27,7 @@ void call_transpose_naive(const unsigned M, const unsigned N, const float *input
     // copy output
     cudaMemcpy(output, dev_output, SIZE, cudaMemcpyDeviceToHost);
     // cuda free
-    batch_free({dev_input, dev_output});
+    batch_cuda_free({dev_input, dev_output});
 }
 
 
@@ -44,7 +44,7 @@ void call_transpose_shared(const unsigned M, const unsigned N, const float *inpu
     // copy output
     cudaMemcpy(output, dev_output, SIZE, cudaMemcpyDeviceToHost);
     // cuda free
-    batch_free({dev_input, dev_output});
+    batch_cuda_free({dev_input, dev_output});
 }
 
 void call_transpose_padding(const unsigned M, const unsigned N, const float *input, float *output) {
@@ -60,7 +60,7 @@ void call_transpose_padding(const unsigned M, const unsigned N, const float *inp
     // copy output
     cudaMemcpy(output, dev_output, SIZE, cudaMemcpyDeviceToHost);
     // cuda free
-    batch_free({dev_input, dev_output});
+    batch_cuda_free({dev_input, dev_output});
 }
 
 void call_transpose_swizzle(const unsigned M, const unsigned N, const float *input, float *output) {
@@ -76,7 +76,7 @@ void call_transpose_swizzle(const unsigned M, const unsigned N, const float *inp
     // copy output
     cudaMemcpy(output, dev_output, SIZE, cudaMemcpyDeviceToHost);
     // cuda free
-    batch_free({dev_input, dev_output});
+    batch_cuda_free({dev_input, dev_output});
 }
 
 void call_transpose_cubalas(const unsigned M, const unsigned N, const float *input, float *output) {
@@ -105,5 +105,5 @@ void call_transpose_cubalas(const unsigned M, const unsigned N, const float *inp
     // copy output
     cudaMemcpy(output, dev_output, SIZE, cudaMemcpyDeviceToHost);
     // cuda free
-    batch_free({dev_input, dev_output});
+    batch_cuda_free({dev_input, dev_output});
 }

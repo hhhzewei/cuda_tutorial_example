@@ -24,7 +24,7 @@ void call_dot(const unsigned N, float *a, float *b, float *ret) {
     // copy output
     cudaMemcpy(ret, dev_ret, sizeof(float), cudaMemcpyDeviceToHost);
     // cuda free
-    batch_free({dev_a, dev_b, dev_ret});
+    batch_cuda_free({dev_a, dev_b, dev_ret});
 }
 
 template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
@@ -39,7 +39,7 @@ void call_dot_shared(const unsigned N, float *a, float *b, float *ret) {
     // copy output
     cudaMemcpy(ret, dev_ret, sizeof(float), cudaMemcpyDeviceToHost);
     // cuda free
-    batch_free({dev_a, dev_b, dev_ret});
+    batch_cuda_free({dev_a, dev_b, dev_ret});
 }
 
 template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
@@ -54,7 +54,7 @@ void call_dot_shared_external(const unsigned N, float *a, float *b, float *ret) 
     // copy output
     cudaMemcpy(ret, dev_ret, sizeof(float), cudaMemcpyDeviceToHost);
     // cuda free
-    batch_free({dev_a, dev_b, dev_ret});
+    batch_cuda_free({dev_a, dev_b, dev_ret});
 }
 
 template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
@@ -70,7 +70,7 @@ void call_dot_warp_shuffle_v0(const unsigned N, float *a, float *b, float *ret) 
     // copy output
     cudaMemcpy(ret, dev_ret, sizeof(float), cudaMemcpyDeviceToHost);
     // cuda free
-    batch_free({dev_a, dev_b, dev_ret});
+    batch_cuda_free({dev_a, dev_b, dev_ret});
 }
 
 template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
@@ -86,7 +86,7 @@ void call_dot_warp_shuffle_v1(const unsigned N, float *a, float *b, float *ret) 
     // copy output
     cudaMemcpy(ret, dev_ret, sizeof(float), cudaMemcpyDeviceToHost);
     // cuda free
-    batch_free({dev_a, dev_b, dev_ret});
+    batch_cuda_free({dev_a, dev_b, dev_ret});
 }
 
 void call_dot_cublas(unsigned N, const float *a, const float *b, float *ret);

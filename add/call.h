@@ -22,7 +22,7 @@ void call_add(const unsigned N, float *a, float *b, float *ret) {
     // copy output
     cudaMemcpy(ret, dev_ret, N * sizeof(float), cudaMemcpyDeviceToHost);
     // device free
-    batch_free({dev_a, dev_b, dev_ret});
+    batch_cuda_free({dev_a, dev_b, dev_ret});
 }
 
 template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
@@ -37,7 +37,7 @@ void call_add_float4(const unsigned N, float *a, float *b, float *ret) {
     // copy output
     cudaMemcpy(ret, dev_ret, N * sizeof(float), cudaMemcpyDeviceToHost);
     // device free
-    batch_free({dev_a, dev_b, dev_ret});
+    batch_cuda_free({dev_a, dev_b, dev_ret});
 }
 
 void call_add_cublas(unsigned N, const float *a, const float *b, float *ret);

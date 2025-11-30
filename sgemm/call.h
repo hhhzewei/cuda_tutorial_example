@@ -10,13 +10,6 @@
 #include "util/util.h"
 #include "kernel.h"
 
-void prepare_sgemm(unsigned M, unsigned K, unsigned N,
-                   const float *a, const float *b, float *&dev_a, float *&dev_b, float *&dev_ret);
-
-void prepare_sgemm_tensor_core(unsigned M, unsigned K, unsigned N,
-                               const float *a, const float *b,
-                               half *&dev_a, half *&dev_b, float *&dev_ret);
-
 void call_sgemm_naive(unsigned M, unsigned K, unsigned N, const float *a, const float *b, float *ret);
 
 void call_sgemm_block_tile(unsigned M, unsigned K, unsigned N, const float *a, const float *b, float *ret);
@@ -27,10 +20,7 @@ template<unsigned BLOCK_M, unsigned BLOCK_N,
     unsigned TILE_K,
     unsigned THREAD_M, unsigned THREAD_N,
     unsigned WARP_CIRCE_LOG2>
-void call_sgemm_thread_tile_v1(const unsigned M, const unsigned K, const unsigned N, float *a, float *b, float *ret) {
-    // device memory
-    float *dev_a, *dev_b, *dev_ret;
-    prepare_sgemm(M, K, N, a, b, dev_a, dev_b, dev_ret);
+void call_sgemm_thread_tile_v1(const unsigned M, const unsigned K, const unsigned N, float *dev_a, float *dev_b, float *dev_ret) {
     // kernel
     dim3 blockDim(BLOCK_N, BLOCK_M),
             gridDim(CEIL(N, BLOCK_N * THREAD_N), CEIL(M, BLOCK_M * THREAD_M));
@@ -39,18 +29,11 @@ void call_sgemm_thread_tile_v1(const unsigned M, const unsigned K, const unsigne
         WARP_CIRCE_LOG2><<<gridDim,blockDim>>>(K, N, dev_a, dev_b, dev_ret);
     check_error(cudaGetLastError());
     check_error(cudaDeviceSynchronize());
-    // copy output
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
-    // cuda free
-    batch_free({dev_a, dev_b, dev_ret});
 }
 
 template<unsigned TILE_M = 32, unsigned TILE_K = 32, unsigned TILE_N = 32,
     unsigned THREAD_M = 2, unsigned THREAD_N = 2>
-void call_sgemm_thread_tile_v2(const unsigned M, const unsigned K, const unsigned N, float *a, float *b, float *ret) {
-    // device memory
-    float *dev_a, *dev_b, *dev_ret;
-    prepare_sgemm(M, K, N, a, b, dev_a, dev_b, dev_ret);
+void call_sgemm_thread_tile_v2(const unsigned M, const unsigned K, const unsigned N, float *dev_a, float *dev_b, float *dev_ret) {
     // kernel
     constexpr unsigned BLOCK_N = TILE_M / THREAD_M, BLOCK_M = TILE_N / THREAD_N;
     dim3 blockDim(BLOCK_N, BLOCK_M),
@@ -60,18 +43,11 @@ void call_sgemm_thread_tile_v2(const unsigned M, const unsigned K, const unsigne
         THREAD_M, THREAD_N><<<gridDim,blockDim>>>(K, N, dev_a, dev_b, dev_ret);
     check_error(cudaGetLastError());
     check_error(cudaDeviceSynchronize());
-    // copy output
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
-    // cuda free
-    batch_free({dev_a, dev_b, dev_ret});
 }
 
 template<unsigned TILE_M = 128, unsigned TILE_K = 8, unsigned TILE_N = 128,
     unsigned THREAD_M = 8, unsigned THREAD_N = 8>
-void call_sgemm_thread_tile_v3(const unsigned M, const unsigned K, const unsigned N, float *a, float *b, float *ret) {
-    // device memory
-    float *dev_a, *dev_b, *dev_ret;
-    prepare_sgemm(M, K, N, a, b, dev_a, dev_b, dev_ret);
+void call_sgemm_thread_tile_v3(const unsigned M, const unsigned K, const unsigned N, float *dev_a, float *dev_b, float *dev_ret) {
     // kernel
     constexpr unsigned BLOCK_N = TILE_M / THREAD_M, BLOCK_M = TILE_N / THREAD_N;
     dim3 blockDim(BLOCK_N, BLOCK_M),
@@ -80,18 +56,11 @@ void call_sgemm_thread_tile_v3(const unsigned M, const unsigned K, const unsigne
         THREAD_M, THREAD_N><<<gridDim,blockDim>>>(K, N, dev_a, dev_b, dev_ret);
     check_error(cudaGetLastError());
     check_error(cudaDeviceSynchronize());
-    // copy output
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
-    // cuda free
-    batch_free({dev_a, dev_b, dev_ret});
 }
 
 template<unsigned TILE_M = 128, unsigned TILE_K = 8, unsigned TILE_N = 128,
     unsigned THREAD_M = 8, unsigned THREAD_N = 8>
-void call_sgemm_thread_tile_v4(const unsigned M, const unsigned K, const unsigned N, float *a, float *b, float *ret) {
-    // device memory
-    float *dev_a, *dev_b, *dev_ret;
-    prepare_sgemm(M, K, N, a, b, dev_a, dev_b, dev_ret);
+void call_sgemm_thread_tile_v4(const unsigned M, const unsigned K, const unsigned N, float *dev_a, float *dev_b, float *dev_ret) {
     // kernel
     constexpr unsigned BLOCK_N = TILE_M / THREAD_M, BLOCK_M = TILE_N / THREAD_N;
     dim3 blockDim(BLOCK_N, BLOCK_M),
@@ -100,19 +69,12 @@ void call_sgemm_thread_tile_v4(const unsigned M, const unsigned K, const unsigne
         THREAD_M, THREAD_N><<<gridDim,blockDim>>>(K, N, dev_a, dev_b, dev_ret);
     check_error(cudaGetLastError());
     check_error(cudaDeviceSynchronize());
-    // copy output
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
-    // cuda free
-    batch_free({dev_a, dev_b, dev_ret});
 }
 
 
 template<unsigned TILE_M = 128, unsigned TILE_K = 8, unsigned TILE_N = 128,
     unsigned THREAD_M = 8, unsigned THREAD_N = 8>
-void call_sgemm_thread_tile_v5(const unsigned M, const unsigned K, const unsigned N, float *a, float *b, float *ret) {
-    // device memory
-    float *dev_a, *dev_b, *dev_ret;
-    prepare_sgemm(M, K, N, a, b, dev_a, dev_b, dev_ret);
+void call_sgemm_thread_tile_v5(const unsigned M, const unsigned K, const unsigned N, float *dev_a, float *dev_b, float *dev_ret) {
     // kernel
     constexpr unsigned BLOCK_N = TILE_M / THREAD_M, BLOCK_M = TILE_N / THREAD_N;
     dim3 blockDim(BLOCK_N, BLOCK_M),
@@ -121,19 +83,12 @@ void call_sgemm_thread_tile_v5(const unsigned M, const unsigned K, const unsigne
         THREAD_M, THREAD_N><<<gridDim,blockDim>>>(K, N, dev_a, dev_b, dev_ret);
     check_error(cudaGetLastError());
     check_error(cudaDeviceSynchronize());
-    // copy output
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
-    // cuda free
-    batch_free({dev_a, dev_b, dev_ret});
 }
 
 template<unsigned TILE_M = 128, unsigned TILE_K = 8, unsigned TILE_N = 128,
     unsigned THREAD_M = 8, unsigned THREAD_N = 8>
-void call_sgemm_thread_tile_v6(const unsigned M, const unsigned K, const unsigned N, float *a, float *b, float *ret) {
-    // device memory
-    float *dev_a, *dev_b, *dev_ret;
-    prepare_sgemm(M, K, N, a, b, dev_a, dev_b, dev_ret);
-    // kernel
+void call_sgemm_thread_tile_v6(const unsigned M, const unsigned K, const unsigned N, float *dev_a, float *dev_b, float *dev_ret) {
+   // kernel
     constexpr unsigned BLOCK_N = TILE_M / THREAD_M, BLOCK_M = TILE_N / THREAD_N;
     dim3 blockDim(BLOCK_N, BLOCK_M),
             gridDim(CEIL(N, BLOCK_N * THREAD_N), CEIL(M, BLOCK_M * THREAD_M));
@@ -141,10 +96,6 @@ void call_sgemm_thread_tile_v6(const unsigned M, const unsigned K, const unsigne
         THREAD_M, THREAD_N><<<gridDim,blockDim>>>(K, N, dev_a, dev_b, dev_ret);
     check_error(cudaGetLastError());
     check_error(cudaDeviceSynchronize());
-    // copy output
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
-    // cuda free
-    batch_free({dev_a, dev_b, dev_ret});
 }
 
 
