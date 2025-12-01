@@ -5,12 +5,10 @@
 
 #include <iostream>
 #include "call.h"
+#include "util/util.h"
 
-void prepare(const unsigned M, const unsigned N, const unsigned K,
-             float *&a, float *&b, float *&ret,
-             float *&dev_a, float *&dev_b, float *&dev_ret,
-             cudaStream_t &stream_a, cudaStream_t &stream_b, cudaStream_t &stream_ret,
-             cudaEvent_t &kernel_finish) {
+void host_prepare(const unsigned M, const unsigned N, const unsigned K,
+                  float *&a, float *&b, float *&ret) {
     // host memory
     a = (float *) malloc(M * K * sizeof(float));
     b = (float *) malloc(K * N * sizeof(float));
@@ -26,19 +24,6 @@ void prepare(const unsigned M, const unsigned N, const unsigned K,
             b[k * N + j] = 0.2f;
         }
     }
-    // stream
-    cudaStreamCreate(&stream_a);
-    cudaStreamCreate(&stream_b);
-    cudaStreamCreate(&stream_ret);
-    // device memory async
-    cudaMallocAsync(&dev_a, M * K * sizeof(float), stream_a);
-    cudaMallocAsync(&dev_b, N * K * sizeof(float), stream_b);
-    cudaMallocAsync(&dev_ret, M * N * sizeof(float), stream_ret);
-    // memory load
-    cudaMemcpyAsync(dev_a, a, M * K * sizeof(float), cudaMemcpyHostToDevice, stream_a);
-    cudaMemcpyAsync(dev_b, b, N * K * sizeof(float), cudaMemcpyHostToDevice, stream_b);
-    // event
-    cudaEventCreate(&kernel_finish);
 }
 
 float sgemm_error(const unsigned M, const unsigned K, const unsigned N, const float *a, const float *b,
@@ -56,97 +41,60 @@ float sgemm_error(const unsigned M, const unsigned K, const unsigned N, const fl
     return error;
 }
 
-void destroy(const unsigned M, const unsigned N, const unsigned K,
-             float *&a, float *&b, float *&ret,
-             float *&dev_a, float *&dev_b, float *&dev_ret,
-             cudaStream_t &stream_a, cudaStream_t &stream_b, cudaStream_t &stream_ret,
-             cudaEvent_t &kernel_finish) {
-    // wait kernel finish
-    cudaEventRecord(kernel_finish, 0);
-    cudaStreamWaitEvent(stream_a, kernel_finish);
-    cudaStreamWaitEvent(stream_b, kernel_finish);
-    cudaStreamWaitEvent(stream_ret, kernel_finish);
-    // device free async
-    cudaFreeAsync(dev_a, stream_a);
-    cudaFreeAsync(dev_b, stream_b);
-    cudaFreeAsync(dev_ret, stream_ret);
-    // stream synchronize
-    cudaStreamSynchronize(stream_a);
-    cudaStreamSynchronize(stream_b);
-    cudaStreamSynchronize(stream_ret);
-    // destroy stream event
-    cudaStreamDestroy(stream_a);
-    cudaStreamDestroy(stream_b);
-    cudaStreamDestroy(stream_ret);
-    cudaEventDestroy(kernel_finish);
-    // host free
-    batch_free({a, b, ret});
-}
-
 int main() {
     constexpr unsigned M = 1 << 11, N = 1 << 11, K = 1 << 12;
-    // host malloc
-    float *a = (float *) malloc(M * K * sizeof(float)),
-            *b = (float *) malloc(K * N * sizeof(float)),
-            *ret = (float *) malloc(M * N * sizeof(float));
+    float *a, *b, *ret;
     float *dev_a, *dev_b, *dev_ret;
     cudaStream_t stream_a, stream_b, stream_ret;
     cudaEvent_t kernel_finish;
-    prepare(M, N, K,
-            a, b, ret,
-            dev_a, dev_b, dev_ret,
-            stream_a, stream_b, stream_ret,
-            kernel_finish);
+    // prepare
+    host_prepare(M, N, K, a, b, ret);
+    device_prepare<float>({
+                              {a, dev_a, M * K, stream_a},
+                              {b, dev_b, K * N, stream_b},
+                              {nullptr, dev_ret, M * N, stream_ret}
+                          }, kernel_finish);
     // call cublast sgemm
-    call_sgemm_cublas(M, K, N, dev_a, dev_b, dev_ret);
+    call_sgemm_cublas(M, K, N, dev_a, dev_b, dev_ret, ret);
+    std::cout << "call sgemm cublas kernel: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call sgemm naive kernel
-    call_sgemm_naive(M, K, N, dev_a, dev_b, dev_ret);
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
+    call_sgemm_naive(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "sgemm naive error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call sgemm block tile kernel
-    call_sgemm_block_tile(M, K, N, dev_a, dev_b, dev_ret);
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
+    call_sgemm_block_tile(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "sgemm block tile error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call sgemm thread tile kernel
-    call_sgemm_thread_tile_v0(M, K, N, dev_a, dev_b, dev_ret);
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
+    call_sgemm_thread_tile_v0(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "sgemm thread tile v0 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call sgemm thread tile v1 kernel
-    call_sgemm_thread_tile_v1<8, 32, 32, 2, 2, 4>(M, K, N, dev_a, dev_b, dev_ret);
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
+    call_sgemm_thread_tile_v1<8, 32, 32, 2, 2, 4>(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "call sgemm thread tile v1 8*32 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call sgemm thread tile v2 kernel
-    call_sgemm_thread_tile_v2(M, K, N, dev_a, dev_b, dev_ret);
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
+    call_sgemm_thread_tile_v2(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "call sgemm thread tile v2 padding error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call sgemm thread tile v3 kernel
-    call_sgemm_thread_tile_v3(M, K, N, dev_a, dev_b, dev_ret);
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
+    call_sgemm_thread_tile_v3(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "call sgemm thread tile v3 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call sgemm thread tile v4 kernel
-    call_sgemm_thread_tile_v4(M, K, N, dev_a, dev_b, dev_ret);
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
+    call_sgemm_thread_tile_v4(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "call sgemm thread tile v4 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call sgemm thread tile v5 kernel
-    call_sgemm_thread_tile_v5(M, K, N, dev_a, dev_b, dev_ret);
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
+    call_sgemm_thread_tile_v5(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "call sgemm thread tile v5 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call sgemm thread tile v6 kernel
-    call_sgemm_thread_tile_v6(M, K, N, dev_a, dev_b, dev_ret);
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
+    call_sgemm_thread_tile_v6(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "call sgemm thread tile v6 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call sgemm tensor core v0 kernel
-    call_sgemm_tensor_core_v0(M, K, N, dev_a, dev_b, dev_ret);
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
+    call_sgemm_tensor_core_v0(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "call sgemm tensor core v0 kernel: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // call sgemm tensor core v1 kernel
-    call_sgemm_tensor_core_v1(M, K, N, dev_a, dev_b, dev_ret);
-    cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
+    call_sgemm_tensor_core_v1(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "call sgemm tensor core v1 kernel: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // host free
-    destroy(M, N, K,
-            a, b, ret,
-            dev_a, dev_b, dev_ret,
-            stream_a, stream_b, stream_ret,
+    destroy({
+                {a, dev_a, stream_a},
+                {b, dev_b, stream_b},
+                {ret, dev_ret, stream_ret}
+            },
             kernel_finish);
 }

@@ -15,6 +15,6 @@ __global__ void add(unsigned N, const float *a, const float *b, float *ret);
  * @param b
  * @param ret
  */
-__global__ void add_float4(unsigned N, float *a, float *b, float *ret);
+__global__ void add_float4(unsigned N, const float *a, const float *b, float *ret);
 
 #endif // CUDA_TUTORIAL_EXAMPLE_KERNEL_H

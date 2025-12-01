@@ -7,11 +7,11 @@ set(CMAKE_CUDA_ARCHITECTURES 80)# A100
 set(CMAKE_CUDA_STANDARD 11)
 include_directories(${PROJECT_SOURCE_DIR})
 
-#add_subdirectory(add)
-#
-#add_subdirectory(dot)
-#
-#add_subdirectory(transpose)
+add_subdirectory(add)
+
+add_subdirectory(dot)
+
+add_subdirectory(transpose)
 
 add_subdirectory(sgemm)
 

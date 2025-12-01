@@ -8,37 +8,25 @@
 #include "util/util.h"
 #include "kernel.h"
 
-void prepare_elementwise(unsigned N, const float *a, const float *b, float *&dev_a, float *&dev_b, float *&dev_ret);
-
 template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
-void call_add(const unsigned N, float *a, float *b, float *ret) {
-    // device memory malloc
-    float *dev_a, *dev_b, *dev_ret;
-    prepare_elementwise(N, a, b, dev_a, dev_b, dev_ret);
+void call_add(const unsigned N, float *dev_a, float *dev_b, float *dev_ret, float *ret) {
     // kernel
     add<<<BLOCK_NUM,THREAD_NUM>>>(N, dev_a, dev_b, dev_ret);
     check_error(cudaGetLastError());
     check_error(cudaDeviceSynchronize());
-    // copy output
+    // memcpy
     cudaMemcpy(ret, dev_ret, N * sizeof(float), cudaMemcpyDeviceToHost);
-    // device free
-    batch_cuda_free({dev_a, dev_b, dev_ret});
 }
 
 template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
-void call_add_float4(const unsigned N, float *a, float *b, float *ret) {
-    // device memory malloc
-    float *dev_a, *dev_b, *dev_ret;
-    prepare_elementwise(N, a, b, dev_a, dev_b, dev_ret);
+void call_add_float4(const unsigned N, float *dev_a, float *dev_b, float *dev_ret, float *ret) {
     // kernel
     add_float4<<<BLOCK_NUM,THREAD_NUM>>>(N, dev_a, dev_b, dev_ret);
     check_error(cudaGetLastError());
     check_error(cudaDeviceSynchronize());
-    // copy output
+    // memcpy
     cudaMemcpy(ret, dev_ret, N * sizeof(float), cudaMemcpyDeviceToHost);
-    // device free
-    batch_cuda_free({dev_a, dev_b, dev_ret});
 }
 
-void call_add_cublas(unsigned N, const float *a, const float *b, float *ret);
+void call_add_cublas(unsigned N, float *dev_a, float *dev_b, float *ret, float *b);
 #endif //CUDA_TUTORIAL_EXAMPLE_CALL_H
