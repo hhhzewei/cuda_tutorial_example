@@ -51,12 +51,18 @@ int main() {
     // call dot shared external kernel
     call_dot_shared_external<blockNum, threadNum>(N, dev_a, dev_b, dev_ret, ret);
     std::cout << "dot shared external error: " << dot_error(N, a, b, ret) << std::endl;
-    // call dot shared warp shuffle kernel
-    call_dot_warp_shuffle_v0<blockNum, threadNum>(N, dev_a, dev_b, dev_ret, ret);
-    std::cout << "dot shared warp shuffle v0 error: " << dot_error(N, a, b, ret) << std::endl;
-    // call dot shared warp shuffle kernel
-    call_dot_warp_shuffle_v1<blockNum, threadNum>(N, dev_a, dev_b, dev_ret, ret);
-    std::cout << "dot shared warp shuffle v1 error: " << dot_error(N, a, b, ret) << std::endl;
+    // call dot warp shuffle down kernel
+    call_dot_warp_shuffle_down<blockNum, threadNum>(N, dev_a, dev_b, dev_ret, ret);
+    std::cout << "dot shared warp shuffle down error: " << dot_error(N, a, b, ret) << std::endl;
+    // call dot shared warp shuffle xor v0 kernel
+    call_dot_warp_shuffle_xor_v0<blockNum, threadNum>(N, dev_a, dev_b, dev_ret, ret);
+    std::cout << "dot shared warp shuffle xor v0 error: " << dot_error(N, a, b, ret) << std::endl;
+    constexpr unsigned PARALLEL_BLOCK_PER_SM = 8;
+    call_dot_warp_shuffle_xor_v0<PARALLEL_BLOCK_PER_SM * NUM_SM, threadNum>(N, dev_a, dev_b, dev_ret, ret);
+    std::cout << "dot shared warp shuffle xor v0 error: " << dot_error(N, a, b, ret) << std::endl;
+    // call dot shared warp shuffle xor v1 kernel
+    call_dot_warp_shuffle_xor_v1<PARALLEL_BLOCK_PER_SM * NUM_SM, threadNum>(N, dev_a, dev_b, dev_ret, ret);
+    std::cout << "dot shared warp shuffle xor v1 error: " << dot_error(N, a, b, ret) << std::endl;
     // destroy
     destroy({
                 {a, dev_a, stream_a},

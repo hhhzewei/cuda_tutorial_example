@@ -49,12 +49,12 @@ void call_dot_shared_external(const unsigned N, float *dev_a, float *dev_b, floa
 }
 
 template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
-void call_dot_warp_shuffle_v0(const unsigned N, float *dev_a, float *dev_b, float *dev_ret, float *ret) {
+void call_dot_warp_shuffle_down(const unsigned N, float *dev_a, float *dev_b, float *dev_ret, float *ret) {
     // init
     cudaMemset(dev_ret, 0, sizeof(float));
     // kernel
     constexpr unsigned warp_num = CEIL(THREAD_NUM, WARP_SIZE);
-    dot_warp_shuffle_v0<warp_num><<<BLOCK_NUM, THREAD_NUM>>>(N, dev_a, dev_b, dev_ret);
+    dot_warp_shuffle_down<warp_num><<<BLOCK_NUM, THREAD_NUM>>>(N, dev_a, dev_b, dev_ret);
     check_error(cudaGetLastError());
     check_error(cudaDeviceSynchronize());
     // copy output
@@ -62,12 +62,25 @@ void call_dot_warp_shuffle_v0(const unsigned N, float *dev_a, float *dev_b, floa
 }
 
 template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
-void call_dot_warp_shuffle_v1(const unsigned N, float *dev_a, float *dev_b, float *dev_ret, float *ret) {
+void call_dot_warp_shuffle_xor_v0(const unsigned N, float *dev_a, float *dev_b, float *dev_ret, float *ret) {
     // init
     cudaMemset(dev_ret, 0, sizeof(float));
     // kernel
     constexpr unsigned warp_num = CEIL(THREAD_NUM, WARP_SIZE);
-    dot_warp_shuffle_v1<warp_num><<<BLOCK_NUM, THREAD_NUM>>>(N, dev_a, dev_b, dev_ret);
+    dot_warp_shuffle_xor_v0<warp_num><<<BLOCK_NUM, THREAD_NUM>>>(N, dev_a, dev_b, dev_ret);
+    check_error(cudaGetLastError());
+    check_error(cudaDeviceSynchronize());
+    // copy output
+    cudaMemcpy(ret, dev_ret, sizeof(float), cudaMemcpyDeviceToHost);
+}
+
+template<unsigned BLOCK_NUM, unsigned THREAD_NUM>
+void call_dot_warp_shuffle_xor_v1(const unsigned N, float *dev_a, float *dev_b, float *dev_ret, float *ret) {
+    // init
+    cudaMemset(dev_ret, 0, sizeof(float));
+    // kernel
+    constexpr unsigned WARP_NUM = CEIL(THREAD_NUM, WARP_SIZE);
+    dot_warp_shuffle_xor_v1<WARP_NUM><<<BLOCK_NUM, THREAD_NUM>>>(N, dev_a, dev_b, dev_ret);
     check_error(cudaGetLastError());
     check_error(cudaDeviceSynchronize());
     // copy output

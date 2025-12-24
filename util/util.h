@@ -7,6 +7,7 @@
 
 
 #define WARP_SIZE 32
+#define NUM_SM 108
 #define CEIL(a,b) (((a)+(b)-1)/(b))
 #define FLOAT4(x) (*((float4*)(&x)))
 // #define _2D_2_1D(a,i,j,step) ((a)[(i)*(step)+(j)])
