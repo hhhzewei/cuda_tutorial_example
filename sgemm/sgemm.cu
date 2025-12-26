@@ -54,9 +54,10 @@ int main() {
                               {b, dev_b, K * N, stream_b},
                               {nullptr, dev_ret, M * N, stream_ret}
                           }, kernel_finish);
-    // call cublast sgemm
+    // call cublas sgemm
     call_sgemm_cublas(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "call sgemm cublas kernel: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
+    // call cutlass sgemm colab装cutlass太麻烦了
     // call sgemm naive kernel
     call_sgemm_naive(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "sgemm naive error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
@@ -66,9 +67,7 @@ int main() {
     // call sgemm thread tile kernel
     call_sgemm_thread_tile_v0(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "sgemm thread tile v0 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
-    // call sgemm thread tile v1 kernel
-    call_sgemm_thread_tile_v1<8, 32, 32, 2, 2, 4>(M, K, N, dev_a, dev_b, dev_ret, ret);
-    std::cout << "call sgemm thread tile v1 8*32 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
+    // call sgemm thread tile v1 kernel太慢永久封印
     // call sgemm thread tile v2 kernel
     call_sgemm_thread_tile_v2(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "call sgemm thread tile v2 padding error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
@@ -84,12 +83,16 @@ int main() {
     // call sgemm thread tile v6 kernel
     call_sgemm_thread_tile_v6(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "call sgemm thread tile v6 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
-    // call sgemm tensor core v0 kernel
-    call_sgemm_tensor_core_v0(M, K, N, dev_a, dev_b, dev_ret, ret);
-    std::cout << "call sgemm tensor core v0 kernel: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
+    // call sgemm thread tile v7 kernel
+    call_sgemm_thread_tile_v7(M, K, N, dev_a, dev_b, dev_ret, ret);
+    std::cout << "call sgemm thread tile v7 error: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
+    // call sgemm tensor core v0 kernel 性能不行，一个block一个warp也太蠢了
     // call sgemm tensor core v1 kernel
     call_sgemm_tensor_core_v1(M, K, N, dev_a, dev_b, dev_ret, ret);
     std::cout << "call sgemm tensor core v1 kernel: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
+    // call sgemm tensor core v2 kernel
+    call_sgemm_tensor_core_v2(M, K, N, dev_a, dev_b, dev_ret, ret);
+    std::cout << "call sgemm tensor core v2 kernel: " << sgemm_error(M, K, N, a, b, ret) << std::endl;
     // host free
     destroy({
                 {a, dev_a, stream_a},

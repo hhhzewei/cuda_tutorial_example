@@ -6,17 +6,20 @@
 #include <mma.h>
 __global__ void sgemm_naive(const unsigned M, const unsigned K, const unsigned N, const float *a, const float *b,
                             float *ret) {
-    const unsigned x = blockIdx.x * blockDim.x + threadIdx.x, y = blockIdx.y * blockDim.y + threadIdx.y;
-    if (x < N && y < M) {
+    const unsigned threadIdxGlobal = blockIdx.x * blockDim.x + threadIdx.x,
+            NUM_THREAD = gridDim.x * blockDim.x;
+    for (unsigned i = threadIdxGlobal; i < M * N; i += NUM_THREAD) {
+        const unsigned x = i / N, y = i % N;
         float value = 0.0f;
-        for (unsigned i = 0; i < K; ++i) {
-            value += a[y * K + i] * b[i * N + x];
+        for (unsigned k = 0; k < K; ++k) {
+            value += a[x * K + k] * b[k * N + y];
         }
-        ret[y * N + x] = value;
+        ret[x * N + y] = value;
     }
 }
 
 __global__ void sgemm_tensor_core_v0(const unsigned K, const unsigned N, const float *a, const float *b, float *ret) {
+    constexpr unsigned WMMA_TILE_M= 16, WMMA_TILE_K = 16, WMMA_TILE_N = 16;
     using namespace nvcuda;
     const unsigned warpIdx = (blockIdx.x * blockDim.x + threadIdx.x) / warpSize,
             warp_N = N / WMMA_TILE_N,

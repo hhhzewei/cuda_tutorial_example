@@ -6,6 +6,10 @@
 #define CUDA_TUTORIAL_EXAMPLE_UTIL_CUH
 
 
+// A100
+#define NUM_SM 108
+#define NUM_THREA_PER_SM 2048
+
 #define WARP_SIZE 32
 #define NUM_SM 108
 #define CEIL(a,b) (((a)+(b)-1)/(b))
@@ -31,9 +35,9 @@ void batch_free(std::initializer_list<void *> ptr_list);
 
 void batch_cuda_free(std::initializer_list<void *> ptr_list);
 
-template <typename T>
+template<typename T>
 struct prepare_param {
-    T *p;// 不malloc，不需要引用
+    T *p; // 不malloc，不需要引用
     T *&dev_p;
     unsigned size;
     cudaStream_t &stream;

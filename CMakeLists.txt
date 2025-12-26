@@ -5,14 +5,17 @@ project(cuda_tutorial_example CUDA)
 set(CMAKE_CUDA_ARCHITECTURES 80)# A100
 
 set(CMAKE_CUDA_STANDARD 11)
+
+#find_package(NvidiaCutlass CONFIG REQUIRED) # vcpkg安装完成提示
+
 include_directories(${PROJECT_SOURCE_DIR})
 
 #add_subdirectory(add)
 
-add_subdirectory(dot)
+#add_subdirectory(dot)
 
 #add_subdirectory(transpose)
 
-#add_subdirectory(sgemm)
+add_subdirectory(sgemm)
 
 

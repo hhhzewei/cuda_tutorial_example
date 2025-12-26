@@ -301,8 +301,8 @@ __global__ void sgemm_thread_tile_v3(const unsigned K, const unsigned N, const f
     float ret_tile[THREAD_M][THREAD_N] = {0.0f};
     for (unsigned k = 0; k < K; k += TILE_K) {
         // 填充共享内存，每个线程一个float4
-        FLOAT4(tile_a[shared_a_y][shared_a_x]) = FLOAT4(_2D_2_1D(a, global_a_y, k+shared_a_x, K));
-        FLOAT4(tile_b[shared_b_y][shared_b_x]) = FLOAT4(_2D_2_1D(b, k+shared_b_y, global_b_x, N));
+sge        FLOAT4(tile_a[shared_a_y][shared_a_x]) = FLOAT4(_2D_2_1D(a, global_a_y, k + shared_a_x, K));
+        FLOAT4(tile_b[shared_b_y][shared_b_x]) = FLOAT4(_2D_2_1D(b, k + shared_b_y, global_b_x, N));
         __syncthreads();
         // 填充寄存器
         float thread_tile_a[THREAD_M][TILE_K] = {0.0f}, thread_tile_b[TILE_K][THREAD_N] = {0.0f};
@@ -372,12 +372,12 @@ __global__ void sgemm_thread_tile_v4(const unsigned K, const unsigned N, const f
         // 填充共享内存，每个线程一个float4
         // FLOAT4(tile_a[shared_a_y][shared_a_x]) = FLOAT4(_2D_2_1D(a, global_a_y, k+shared_a_x, K));
         // 寄存，转置后逐个写入shared memory
-        float4 tmp_a = FLOAT4(_2D_2_1D(a, global_a_y, k+shared_a_x, K));
+        float4 tmp_a = FLOAT4(_2D_2_1D(a, global_a_y, k + shared_a_x, K));
         tile_a[shared_a_x][shared_a_y] = tmp_a.x;
         tile_a[shared_a_x + 1][shared_a_y] = tmp_a.y;
         tile_a[shared_a_x + 2][shared_a_y] = tmp_a.z;
         tile_a[shared_a_x + 3][shared_a_y] = tmp_a.w;
-        FLOAT4(tile_b[shared_b_y][shared_b_x]) = FLOAT4(_2D_2_1D(b, k+shared_b_y, global_b_x, N));
+        FLOAT4(tile_b[shared_b_y][shared_b_x]) = FLOAT4(_2D_2_1D(b, k + shared_b_y, global_b_x, N));
         __syncthreads();
         // 填充寄存器
         float thread_tile_a[THREAD_M][TILE_K] = {0.0f}, thread_tile_b[TILE_K][THREAD_N] = {0.0f};
@@ -486,12 +486,12 @@ __global__ void sgemm_thread_tile_v5(const unsigned K, const unsigned N, const f
         // 填充共享内存，每个线程一个float4
         // FLOAT4(tile_a[shared_a_y][shared_a_x]) = FLOAT4(_2D_2_1D(a, global_a_y, k+shared_a_x, K));
         // 寄存，转置后逐个写入shared memory
-        tmp_a = FLOAT4(_2D_2_1D(a, global_a_y, k+shared_a_x, K));
+        tmp_a = FLOAT4(_2D_2_1D(a, global_a_y, k + shared_a_x, K));
         tile_a[mark][shared_a_x][shared_a_y] = tmp_a.x;
         tile_a[mark][shared_a_x + 1][shared_a_y] = tmp_a.y;
         tile_a[mark][shared_a_x + 2][shared_a_y] = tmp_a.z;
         tile_a[mark][shared_a_x + 3][shared_a_y] = tmp_a.w;
-        FLOAT4(tile_b[mark][shared_b_y][shared_b_x]) = FLOAT4(_2D_2_1D(b, k+shared_b_y, global_b_x, N));
+        FLOAT4(tile_b[mark][shared_b_y][shared_b_x]) = FLOAT4(_2D_2_1D(b, k + shared_b_y, global_b_x, N));
         __syncthreads();
     }
     // 使用最后一次读取的数据
@@ -668,9 +668,117 @@ __global__ void sgemm_thread_tile_v6(const unsigned K, const unsigned N, const f
     }
 }
 
-#define WMMA_TILE_M 16
-#define WMMA_TILE_K 16
-#define WMMA_TILE_N 16
+/**
+ * 算法重构，使用外积思想
+ *
+ * 单个线程 数据缓存 寄存器占用 THREAD_TILE_M*TILE_K+THREAD_TILE_N*TILE_K -> THREAD_TILE_M+THREAD_TILE_M
+ *
+ *
+ * @tparam TILE_M TILE尺寸，TILE_M==BLOCK_M*THREAD_M==TILE_N
+ * @tparam TILE_K TILE尺寸，TILE_K*TILE_M==TILE_K*TILE_N==4*BLOCK_M*BLOCK_N
+ * @tparam TILE_N TILE尺寸，TILE_N==BLOCK_N*THREAD_N==TILE_M
+ * @tparam THREAD_TILE_M
+ * @tparam THREAD_TILE_N
+ */
+template<unsigned TILE_M = 64, unsigned TILE_K = 16, unsigned TILE_N = 64,
+    unsigned THREAD_TILE_M = 4, unsigned THREAD_TILE_N = 4>
+__global__ void sgemm_thread_tile_v7(const unsigned K, const unsigned N, const float *a, const float *b, float *ret) {
+    __shared__ float tile_a[2][TILE_K][TILE_M], //padding
+            tile_b[2][TILE_K][TILE_N];
+    const unsigned threadIdxInBlock = threadIdx.y * blockDim.x + threadIdx.x,
+            NUM_THREAD_PER_BLOCK = blockDim.x * blockDim.y;
+    const unsigned TILE_i = blockIdx.y, TILE_j = blockIdx.x,
+            TILE_OFFSET_i = TILE_i * TILE_M, TILE_OFFSET_j = TILE_j * TILE_N;
+    // first load
+    bool flag = false;
+    for (unsigned i = threadIdxInBlock * 4; i < TILE_M * TILE_K; i += NUM_THREAD_PER_BLOCK * 4) {
+        const unsigned shared_i = i / TILE_K, shared_j = i % TILE_K;
+        float4 tmp = FLOAT4(_2D_2_1D(a, TILE_OFFSET_i + shared_i, shared_j, K));
+        // 转置
+        tile_a[flag][shared_j + 0][shared_i] = tmp.x;
+        tile_a[flag][shared_j + 1][shared_i] = tmp.y;
+        tile_a[flag][shared_j + 2][shared_i] = tmp.z;
+        tile_a[flag][shared_j + 3][shared_i] = tmp.w;
+    }
+    for (unsigned i = threadIdxInBlock * 4; i < TILE_N * TILE_K; i += NUM_THREAD_PER_BLOCK * 4) {
+        const unsigned shared_i = i / TILE_N, shared_j = i % TILE_N;
+        FLOAT4(tile_b[flag][shared_i][shared_j]) = FLOAT4(_2D_2_1D(b, shared_i, TILE_OFFSET_j + shared_j, N));
+    }
+    __syncthreads();
+    const unsigned THREAD_TILE_i = threadIdx.y, THREAD_TILE_j = threadIdx.x,
+            THREAD_TILE_OFFSET_i = THREAD_TILE_i * THREAD_TILE_M, THREAD_TILE_OFFSET_j = THREAD_TILE_j * THREAD_TILE_N;
+    float thread_tile[THREAD_TILE_M][THREAD_TILE_N] = {0.0f};
+    float thread_tile_a[THREAD_TILE_M], thread_tile_b[THREAD_TILE_N];
+#pragma unroll
+    for (unsigned k = TILE_K; k < K; k += TILE_K) {
+        // compute
+#pragma unroll
+        for (unsigned tk = 0; tk < TILE_K; ++tk) {
+#pragma unroll
+            for (unsigned i = 0; i < THREAD_TILE_M; i += 4) {
+                FLOAT4(thread_tile_a[i]) = FLOAT4(tile_a[flag][tk][THREAD_TILE_OFFSET_i + i]);
+            }
+#pragma unroll
+            for (unsigned i = 0; i < THREAD_TILE_N; i += 4) {
+                FLOAT4(thread_tile_b[i]) = FLOAT4(tile_b[flag][tk][THREAD_TILE_OFFSET_j + i]);
+            }
+#pragma unroll
+            for (unsigned i = 0; i < THREAD_TILE_M; ++i) {
+#pragma unroll
+                for (unsigned j = 0; j < THREAD_TILE_N; ++j) {
+                    thread_tile[i][j] += thread_tile_a[i] * thread_tile_b[j];
+                }
+            }
+        }
+        // load
+        flag = !flag;
+        for (unsigned i = threadIdxInBlock * 4; i < TILE_M * TILE_K; i += NUM_THREAD_PER_BLOCK * 4) {
+            const unsigned shared_i = i / TILE_K, shared_j = i % TILE_K;
+            float4 tmp = FLOAT4(_2D_2_1D(a, TILE_OFFSET_i + shared_i, k + shared_j, K));
+            // 转置
+            tile_a[flag][shared_j + 0][shared_i] = tmp.x;
+            tile_a[flag][shared_j + 1][shared_i] = tmp.y;
+            tile_a[flag][shared_j + 2][shared_i] = tmp.z;
+            tile_a[flag][shared_j + 3][shared_i] = tmp.w;
+        }
+        for (unsigned i = threadIdxInBlock * 4; i < TILE_N * TILE_K; i += NUM_THREAD_PER_BLOCK * 4) {
+            const unsigned shared_i = i / TILE_N, shared_j = i % TILE_N;
+            FLOAT4(tile_b[flag][shared_i][shared_j]) = FLOAT4(_2D_2_1D(b, k + shared_i, TILE_OFFSET_j + shared_j, N));
+        }
+        // sync
+        __syncthreads();
+    }
+    // last compute
+#pragma unroll
+    for (unsigned tk = 0; tk < TILE_K; ++tk) {
+#pragma unroll
+        for (unsigned i = 0; i < THREAD_TILE_M; i += 4) {
+            FLOAT4(thread_tile_a[i]) = FLOAT4(tile_a[flag][tk][THREAD_TILE_OFFSET_i + i]);
+        }
+#pragma unroll
+        for (unsigned i = 0; i < THREAD_TILE_N; i += 4) {
+            FLOAT4(thread_tile_b[i]) = FLOAT4(tile_b[flag][tk][THREAD_TILE_OFFSET_j + i]);
+        }
+#pragma unroll
+        for (unsigned i = 0; i < THREAD_TILE_M; ++i) {
+#pragma unroll
+            for (unsigned j = 0; j < THREAD_TILE_N; ++j) {
+                thread_tile[i][j] += thread_tile_a[i] * thread_tile_b[j];
+            }
+        }
+    }
+    // store
+#pragma unroll
+    for (unsigned i = 0; i < THREAD_TILE_M; ++i) {
+#pragma unroll
+        for (unsigned j = 0; j < THREAD_TILE_N; j += 4) {
+            FLOAT4(_2D_2_1D(ret, TILE_OFFSET_i + THREAD_TILE_OFFSET_i + i, TILE_OFFSET_j + THREAD_TILE_OFFSET_j + j, N))
+                    =
+                    FLOAT4(thread_tile[i][j]);
+        }
+    }
+}
+
 
 /**
  * 一维warp，每个warp处理16*16 tile
@@ -687,60 +795,131 @@ __global__ void sgemm_tensor_core_v0(unsigned K, unsigned N, const float *a, con
 
 template<unsigned TILE_M, unsigned TILE_N>
 __global__ void sgemm_tensor_core_v1(const unsigned K, const unsigned N, const float *a, const float *b, float *ret) {
+    constexpr unsigned WMMA_TILE_M = 16, WMMA_TILE_K = 16, WMMA_TILE_N = 16;
+    constexpr unsigned WMMA_TILE_IDX_STRIDE = TILE_N / WMMA_TILE_N;
     using namespace nvcuda;
     constexpr unsigned TILE_K = WMMA_TILE_K;
     // 双缓冲
     __shared__ half tile_a[2][TILE_M][TILE_K], tile_b[2][TILE_K][TILE_N];
     // block内序号
-    const unsigned threadId = threadIdx.y * blockDim.x + threadIdx.x,
-            threadNum = blockDim.x * blockDim.y,
-            warp_i = threadIdx.y, warp_j = threadIdx.x / WARP_SIZE;
+    const unsigned threadIdxInBlock = threadIdx.x, NUM_THREAD_IN_BLOCK = blockDim.x, warpIdx =
+            threadIdxInBlock / WARP_SIZE;
+    const unsigned TILE_IDX_i = blockIdx.y, TILE_IDX_j = blockIdx.x;
+    const unsigned WMMA_TILE_IDX_i = warpIdx / WMMA_TILE_IDX_STRIDE, WMMA_TILE_IDX_j = warpIdx % WMMA_TILE_IDX_STRIDE;
     // first load to shared
     bool flag = false;
 #pragma unroll
-    for (unsigned i = threadId; i < TILE_M * TILE_K; i += threadNum) {
+    for (unsigned i = threadIdxInBlock; i < TILE_M * TILE_K; i += NUM_THREAD_IN_BLOCK) {
         const unsigned shared_a_i = i / TILE_K, shared_a_j = i % TILE_K;
         tile_a[flag][shared_a_i][shared_a_j] = __float2half(
-            _2D_2_1D(a, blockIdx.y * TILE_M + shared_a_i, shared_a_j, K));
+            _2D_2_1D(a, TILE_IDX_i * TILE_M + shared_a_i, shared_a_j, K));
     }
 #pragma unroll
-    for (unsigned i = threadId; i < TILE_N * TILE_K; i += threadNum) {
+    for (unsigned i = threadIdxInBlock; i < TILE_N * TILE_K; i += NUM_THREAD_IN_BLOCK) {
         const unsigned shared_b_i = i / TILE_N, shared_b_j = i % TILE_N;
         tile_b[flag][shared_b_i][shared_b_j] = __float2half(
-            _2D_2_1D(b, shared_b_i, blockIdx.x * TILE_N + shared_b_j, N));
+            _2D_2_1D(b, shared_b_i, TILE_IDX_j * TILE_N + shared_b_j, N));
     }
     __syncthreads();
-    wmma::fragment<wmma::matrix_a,WMMA_TILE_M,WMMA_TILE_N,WMMA_TILE_K, half, wmma::row_major> frag_a;
-    wmma::fragment<wmma::matrix_b,WMMA_TILE_M,WMMA_TILE_N,WMMA_TILE_K, half, wmma::row_major> frag_b;
-    wmma::fragment<wmma::accumulator,WMMA_TILE_M,WMMA_TILE_N,WMMA_TILE_K, float> frag_c;
+    wmma::fragment<wmma::matrix_a, WMMA_TILE_M, WMMA_TILE_N, WMMA_TILE_K, half, wmma::row_major> frag_a;
+    wmma::fragment<wmma::matrix_b, WMMA_TILE_M, WMMA_TILE_N, WMMA_TILE_K, half, wmma::row_major> frag_b;
+    wmma::fragment<wmma::accumulator, WMMA_TILE_M, WMMA_TILE_N, WMMA_TILE_K, float> frag_c;
     wmma::fill_fragment(frag_c, 0.0f);
 #pragma unroll
     for (unsigned k = WMMA_TILE_K; k < K; k += WMMA_TILE_K) {
-        wmma::load_matrix_sync(frag_a, &tile_a[flag][warp_i * WMMA_TILE_M][0], TILE_K);
-        wmma::load_matrix_sync(frag_b, &tile_b[flag][0][warp_j * WMMA_TILE_N], TILE_N);
+        wmma::load_matrix_sync(frag_a, &tile_a[flag][WMMA_TILE_IDX_i * WMMA_TILE_M][0], TILE_K);
+        wmma::load_matrix_sync(frag_b, &tile_b[flag][0][WMMA_TILE_IDX_j * WMMA_TILE_N], TILE_N);
         wmma::mma_sync(frag_c, frag_a, frag_b, frag_c);
         flag = !flag;
 #pragma unroll
-        for (unsigned i = threadId; i < TILE_M * TILE_K; i += threadNum) {
+        for (unsigned i = threadIdxInBlock; i < TILE_M * TILE_K; i += NUM_THREAD_IN_BLOCK) {
             const unsigned shared_a_i = i / TILE_K, shared_a_j = i % TILE_K;
-            tile_a[flag][shared_a_i][shared_a_j] = __half2float(
-                _2D_2_1D(a, blockIdx.y * TILE_M + shared_a_i, k + shared_a_j, K));
+            tile_a[flag][shared_a_i][shared_a_j] = __float2half(
+                _2D_2_1D(a, TILE_IDX_i * TILE_M + shared_a_i, k + shared_a_j, K));
         }
 #pragma unroll
-        for (unsigned i = threadId; i < TILE_N * TILE_K; i += threadNum) {
+        for (unsigned i = threadIdxInBlock; i < TILE_N * TILE_K; i += NUM_THREAD_IN_BLOCK) {
             const unsigned shared_b_i = i / TILE_N, shared_b_j = i % TILE_N;
-            tile_b[flag][shared_b_i][shared_b_j] = __half2float(
-                _2D_2_1D(b, k + shared_b_i, blockIdx.x * TILE_N + shared_b_j, N));
+            tile_b[flag][shared_b_i][shared_b_j] = __float2half(
+                _2D_2_1D(b, k + shared_b_i, TILE_IDX_j * TILE_N + shared_b_j, N));
         }
         __syncthreads();
     }
     // last compute
-    wmma::load_matrix_sync(frag_a, &tile_a[flag][warp_i * WMMA_TILE_M][0], TILE_K);
-    wmma::load_matrix_sync(frag_b, &tile_b[flag][0][warp_j * WMMA_TILE_N], TILE_N);
+    wmma::load_matrix_sync(frag_a, &tile_a[flag][WMMA_TILE_IDX_i * WMMA_TILE_M][0], TILE_K);
+    wmma::load_matrix_sync(frag_b, &tile_b[flag][0][WMMA_TILE_IDX_j * WMMA_TILE_N], TILE_N);
     wmma::mma_sync(frag_c, frag_a, frag_b, frag_c);
     // load to global
-    const unsigned ret_i = blockIdx.y * TILE_M + warp_i * WMMA_TILE_M;
-    const unsigned ret_j = blockIdx.x * TILE_N + warp_j * WMMA_TILE_N;
+    const unsigned ret_i = blockIdx.y * TILE_M + WMMA_TILE_IDX_i * WMMA_TILE_M;
+    const unsigned ret_j = blockIdx.x * TILE_N + WMMA_TILE_IDX_j * WMMA_TILE_N;
     wmma::store_matrix_sync(&_2D_2_1D(ret, ret_i, ret_j, N), frag_c, N, wmma::mem_row_major);
 }
+
+/**
+ * 在v1基础上，tensor core输入类型改为float
+ */
+template<unsigned TILE_M, unsigned TILE_N>
+__global__ void sgemm_tensor_core_v2(const unsigned K, const unsigned N, const float *a, const float *b, float *ret) {
+    constexpr unsigned WMMA_TILE_M = 16, WMMA_TILE_K = 8, WMMA_TILE_N = 16;
+    constexpr unsigned WMMA_TILE_IDX_STRIDE = TILE_N / WMMA_TILE_N;
+    using namespace nvcuda;
+    constexpr unsigned TILE_K = WMMA_TILE_K;
+    // 双缓冲
+    __shared__ float tile_a[2][TILE_M][TILE_K], tile_b[2][TILE_K][TILE_N];
+    // block内序号
+    const unsigned threadIdxInBlock = threadIdx.x, NUM_THREAD_IN_BLOCK = blockDim.x, warpIdx =
+            threadIdxInBlock / WARP_SIZE;
+    const unsigned TILE_IDX_i = blockIdx.y, TILE_IDX_j = blockIdx.x;
+    const unsigned WMMA_TILE_IDX_i = warpIdx / WMMA_TILE_IDX_STRIDE, WMMA_TILE_IDX_j = warpIdx % WMMA_TILE_IDX_STRIDE;
+    // first load to shared
+    bool flag = false;
+#pragma unroll
+    for (unsigned i = threadIdxInBlock; i < TILE_M * TILE_K; i += NUM_THREAD_IN_BLOCK) {
+        const unsigned shared_a_i = i / TILE_K, shared_a_j = i % TILE_K;
+        tile_a[flag][shared_a_i][shared_a_j] = wmma::__float_to_tf32(
+            _2D_2_1D(a, TILE_IDX_i * TILE_M + shared_a_i, shared_a_j, K));
+    }
+#pragma unroll
+    for (unsigned i = threadIdxInBlock; i < TILE_N * TILE_K; i += NUM_THREAD_IN_BLOCK) {
+        const unsigned shared_b_i = i / TILE_N, shared_b_j = i % TILE_N;
+        tile_b[flag][shared_b_i][shared_b_j] = wmma::__float_to_tf32(
+            _2D_2_1D(b, shared_b_i, TILE_IDX_j * TILE_N + shared_b_j, N));
+    }
+    __syncthreads();
+    wmma::fragment<wmma::matrix_a, WMMA_TILE_M, WMMA_TILE_N, WMMA_TILE_K, wmma::precision::tf32, wmma::row_major>
+            frag_a;
+    wmma::fragment<wmma::matrix_b, WMMA_TILE_M, WMMA_TILE_N, WMMA_TILE_K, wmma::precision::tf32, wmma::row_major>
+            frag_b;
+    wmma::fragment<wmma::accumulator, WMMA_TILE_M, WMMA_TILE_N, WMMA_TILE_K, float> frag_c;
+    wmma::fill_fragment(frag_c, 0.0f);
+#pragma unroll
+    for (unsigned k = WMMA_TILE_K; k < K; k += WMMA_TILE_K) {
+        wmma::load_matrix_sync(frag_a, &tile_a[flag][WMMA_TILE_IDX_i * WMMA_TILE_M][0], TILE_K);
+        wmma::load_matrix_sync(frag_b, &tile_b[flag][0][WMMA_TILE_IDX_j * WMMA_TILE_N], TILE_N);
+        wmma::mma_sync(frag_c, frag_a, frag_b, frag_c);
+        flag = !flag;
+#pragma unroll
+        for (unsigned i = threadIdxInBlock; i < TILE_M * TILE_K; i += NUM_THREAD_IN_BLOCK) {
+            const unsigned shared_a_i = i / TILE_K, shared_a_j = i % TILE_K;
+            tile_a[flag][shared_a_i][shared_a_j] = wmma::__float_to_tf32(
+                _2D_2_1D(a, TILE_IDX_i * TILE_M + shared_a_i, k + shared_a_j, K));
+        }
+#pragma unroll
+        for (unsigned i = threadIdxInBlock; i < TILE_N * TILE_K; i += NUM_THREAD_IN_BLOCK) {
+            const unsigned shared_b_i = i / TILE_N, shared_b_j = i % TILE_N;
+            tile_b[flag][shared_b_i][shared_b_j] = wmma::__float_to_tf32(
+                _2D_2_1D(b, k + shared_b_i, TILE_IDX_j * TILE_N + shared_b_j, N));
+        }
+        __syncthreads();
+    }
+    // last compute
+    wmma::load_matrix_sync(frag_a, &tile_a[flag][WMMA_TILE_IDX_i * WMMA_TILE_M][0], TILE_K);
+    wmma::load_matrix_sync(frag_b, &tile_b[flag][0][WMMA_TILE_IDX_j * WMMA_TILE_N], TILE_N);
+    wmma::mma_sync(frag_c, frag_a, frag_b, frag_c);
+    // load to global
+    const unsigned ret_i = blockIdx.y * TILE_M + WMMA_TILE_IDX_i * WMMA_TILE_M;
+    const unsigned ret_j = blockIdx.x * TILE_N + WMMA_TILE_IDX_j * WMMA_TILE_N;
+    wmma::store_matrix_sync(&_2D_2_1D(ret, ret_i, ret_j, N), frag_c, N, wmma::mem_row_major);
+}
+
 #endif // CUDA_TUTORIAL_EXAMPLE_KERNEL_H
