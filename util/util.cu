@@ -30,7 +30,9 @@ void destroy(std::initializer_list<destroy_param> param_list, const cudaEvent_t 
         // destroy stream
         cudaStreamDestroy(param.stream);
         // host free
-        free(param.p);
+        if (param.p) {
+            free(param.p);
+        }
     }
     // destroy event
     cudaEventDestroy(kernel_finish);

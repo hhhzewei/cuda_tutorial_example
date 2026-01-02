@@ -5,26 +5,12 @@
 #ifndef CUDA_TUTORIAL_EXAMPLE_KERNEL_H
 #define CUDA_TUTORIAL_EXAMPLE_KERNEL_H
 
-#include <float.h>
-
 #include "util/util.h"
+#include "util/functor.h"
 
 // dot
 __global__ void dot(unsigned N, float *a, const float *b, float *ret);
 
-__device__ __forceinline__ void shuffle_down_reduce(float &value, const unsigned NUM) {
-#pragma unroll
-    for (unsigned offset = NUM >> 1; offset > 0; offset >>= 1) {
-        value += __shfl_down_sync(0xffffffff, value, offset);
-    }
-}
-
-__device__ __forceinline__ void shuffle_xor_reduce(float &value, const unsigned NUM) {
-#pragma unroll
-    for (unsigned offset = NUM >> 1; offset > 0; offset >>= 1) {
-        value += __shfl_xor_sync(0xffffffff, value, offset);
-    }
-}
 
 template<const int BLOCK_DIM>
 __global__ void dot_share(const unsigned N, const float *a, const float *b, float *ret) {
@@ -66,14 +52,14 @@ __global__ void dot_warp_shuffle_down(const unsigned N, const float *a, const fl
         value += a[i] * b[i];
     }
     __syncwarp();
-    shuffle_down_reduce(value,WARP_SIZE);
+    shuffle_down_reduce<float, AddFunctor,WARP_SIZE>(value);
     if (laneIdx == 0) {
         tmp[warpIdx] = value;
     }
     __syncthreads();
     if (warpIdx == 0) {
         value = laneIdx < WARP_NUM ? tmp[laneIdx] : 0.0f;
-        shuffle_down_reduce(value, WARP_NUM);
+        shuffle_down_reduce<float, AddFunctor, WARP_NUM>(value);
         if (laneIdx == 0) {
             atomicAdd(ret, value);
         }
@@ -90,14 +76,14 @@ __global__ void dot_warp_shuffle_xor_v0(const unsigned N, float *a, float *b, fl
         value += a[i] * b[i];
     }
     __syncwarp();
-    shuffle_xor_reduce(value,WARP_SIZE);
+    shuffle_xor_reduce<float, AddFunctor,WARP_SIZE>(value);
     if (laneIdx == 0) {
         tmp[warpIdx] = value;
     }
     __syncthreads();
     if (warpIdx == 0) {
         value = laneIdx < WARP_NUM ? tmp[laneIdx] : 0.0f;
-        shuffle_xor_reduce(value, WARP_NUM);
+        shuffle_xor_reduce<float, AddFunctor, WARP_NUM>(value);
         if (laneIdx == 0) {
             atomicAdd(ret, value);
         }
@@ -124,13 +110,13 @@ __global__ void dot_warp_shuffle_xor_v1(const unsigned N, float *a, float *b, fl
         sum += a[i] * b[i];
     }
     __syncwarp();
-    shuffle_xor_reduce(sum,WARP_SIZE);
+    shuffle_xor_reduce<float, AddFunctor,WARP_SIZE>(sum);
     if (lane == 0) {
         smem[warpIdx] = sum;
     }
     __syncthreads();
     sum = lane < NUM_WARP ? smem[lane] : 0.0f;
-    shuffle_xor_reduce(sum, NUM_WARP);
+    shuffle_xor_reduce<float, AddFunctor, NUM_WARP>(sum);
     // sum = __shfl_sync(0xffffffff,sum,0);//broadcast
     if (threadIdx.x == 0) {
         atomicAdd(c, sum);

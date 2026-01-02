@@ -65,7 +65,7 @@ void call_sgemm_cublas(const unsigned M, const unsigned K, const unsigned N, con
 
 void call_sgemm_naive(const unsigned M, const unsigned K, const unsigned N, const float *dev_a, const float *dev_b,
                       float *dev_ret, float *ret) {
-    constexpr unsigned THREAD_NUM = 256, BLOCK_PER_SM = NUM_THREA_PER_SM / THREAD_NUM;
+    constexpr unsigned THREAD_NUM = 256, BLOCK_PER_SM = NUM_THREAD_PER_SM / THREAD_NUM;
     sgemm_naive<<<NUM_SM * BLOCK_PER_SM,THREAD_NUM>>>(M, K, N, dev_a, dev_b, dev_ret);
     check_error(cudaGetLastError());
     check_error(cudaDeviceSynchronize());

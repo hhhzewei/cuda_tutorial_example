@@ -6,13 +6,13 @@
 #include "util/util.h"
 
 void host_prepare(const unsigned N,
-                  float *&a, float *&b, float *&ret) {
+                  float *&x, float *&b, float *&ret) {
     // host memory malloc
-    a = (float *) malloc(N * sizeof(float));
+    x = (float *) malloc(N * sizeof(float));
     b = (float *) malloc(N * sizeof(float));
     ret = (float *) malloc(N * sizeof(float));
     for (unsigned i = 0; i < N; ++i) {
-        a[i] = 1.0f;
+        x[i] = 1.0f;
         b[i] = 2.0f;
     }
 }
@@ -38,6 +38,9 @@ int main() {
                               {b, dev_b, N, stream_b},
                               {nullptr, dev_ret, N, stream_ret}
                           }, kernel_finish);
+    // call add cublas
+    call_add_cublas(N, dev_a, dev_b, ret, b);
+    std::cout << "cublas add error: " << add_error(N, a, b, ret) << std::endl;
     // call add kernel
     constexpr unsigned threadNum = 256;
     constexpr unsigned blockNum = CEIL(N, threadNum);
@@ -46,9 +49,9 @@ int main() {
     // call add float4
     call_add_float4<blockNum, threadNum>(N, dev_a, dev_b, dev_ret, ret);
     std::cout << "add float4 error: " << add_error(N, a, b, ret) << std::endl;
-    // call add cublas
-    call_add_cublas(N, dev_a, dev_b, ret, b);
-    std::cout << "cublas add error: " << add_error(N, a, b, ret) << std::endl;
+    // call add v1 kernel
+    call_add_v1(N, dev_a, dev_b, dev_ret, ret);
+    std::cout << "add v1 error: " << add_error(N, a, b, ret) << std::endl;
     // destroy
     destroy({
                 {a, dev_a, stream_a},

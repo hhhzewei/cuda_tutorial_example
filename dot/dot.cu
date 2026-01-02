@@ -6,13 +6,13 @@
 #include "call.h"
 #include "util/util.h"
 
-void host_prepare(const unsigned N, float *&a, float *&b, float *&ret) {
+void host_prepare(const unsigned N, float *&x, float *&b, float *&ret) {
     // host memory malloc
-    a = (float *) malloc(N * sizeof(float));
+    x = (float *) malloc(N * sizeof(float));
     b = (float *) malloc(N * sizeof(float));
     ret = (float *) malloc(sizeof(float));
     for (int i = 0; i < N; ++i) {
-        a[i] = b[i] = 1.0f;
+        x[i] = b[i] = 1.0f;
     }
 }
 
@@ -61,8 +61,11 @@ int main() {
     call_dot_warp_shuffle_xor_v0<PARALLEL_BLOCK_PER_SM * NUM_SM, threadNum>(N, dev_a, dev_b, dev_ret, ret);
     std::cout << "dot shared warp shuffle xor v0 error: " << dot_error(N, a, b, ret) << std::endl;
     // call dot shared warp shuffle xor v1 kernel
-    call_dot_warp_shuffle_xor_v1<PARALLEL_BLOCK_PER_SM * NUM_SM, threadNum>(N, dev_a, dev_b, dev_ret, ret);
+    call_dot_warp_shuffle_xor_v1(N, dev_a, dev_b, dev_ret, ret);
     std::cout << "dot shared warp shuffle xor v1 error: " << dot_error(N, a, b, ret) << std::endl;
+    // call dot shared warp shuffle xor v2 kernel
+    call_dot_warp_shuffle_xor_v2(N, dev_a, dev_b, dev_ret, ret);
+    std::cout << "dot shared warp shuffle xor v2 error: " << dot_error(N, a, b, ret) << std::endl;
     // destroy
     destroy({
                 {a, dev_a, stream_a},
