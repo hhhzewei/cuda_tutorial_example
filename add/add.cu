@@ -15,11 +15,11 @@ float add_error(const unsigned N, const float *a, const float *b, const float *c
 
 int main() {
     constexpr unsigned N = 1 << 20;
-    auto initializer_a = [](unsigned i) { return 1.0f; };
-    auto initializer_b = [](unsigned i) { return 2.0f; };
-    const DeviceMemory<float, true, decltype(initializer_a)> a_mem(N, initializer_a);
-    const DeviceMemory<float, true, decltype(initializer_b)> b_mem(N, initializer_b);
-    const DeviceMemory<float, true> ret_mem(N, NoInit());
+    auto initializer_a = [](unsigned) { return 1.0f; };
+    auto initializer_b = [](unsigned) { return 2.0f; };
+    const DeviceMemory<float, true> a_mem(N, initializer_a);
+    const DeviceMemory<float, true> b_mem(N, initializer_b);
+    const DeviceMemory<float, true> ret_mem(N);
     // call add cublas
     call_add_cublas(N, a_mem.dev_p, b_mem.dev_p, ret_mem.p, b_mem.p);
     std::cout << "cublas add error: " << add_error(N, a_mem.p, b_mem.p, ret_mem.p) << std::endl;

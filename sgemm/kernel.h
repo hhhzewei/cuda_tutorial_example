@@ -301,7 +301,7 @@ __global__ void sgemm_thread_tile_v3(const unsigned K, const unsigned N, const f
     float ret_tile[THREAD_M][THREAD_N] = {0.0f};
     for (unsigned k = 0; k < K; k += TILE_K) {
         // 填充共享内存，每个线程一个float4
-sge        FLOAT4(tile_a[shared_a_y][shared_a_x]) = FLOAT4(_2D_2_1D(a, global_a_y, k + shared_a_x, K));
+        FLOAT4(tile_a[shared_a_y][shared_a_x]) = FLOAT4(_2D_2_1D(a, global_a_y, k + shared_a_x, K));
         FLOAT4(tile_b[shared_b_y][shared_b_x]) = FLOAT4(_2D_2_1D(b, k + shared_b_y, global_b_x, N));
         __syncthreads();
         // 填充寄存器

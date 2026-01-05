@@ -37,8 +37,8 @@ void call_dot_warp_shuffle_xor_v2(const unsigned N, const float *dev_a, const fl
     constexpr unsigned NUM_THREAD = 256, PARALLEL_BLOCK_PER_SM = NUM_THREAD_PER_SM / NUM_THREAD,
             NUM_BLOCK = PARALLEL_BLOCK_PER_SM * NUM_SM;
     constexpr unsigned NUM_WARP = CEIL(NUM_THREAD, WARP_SIZE);
-    reduce<float, MultipleFunctor, AddFunctor, AtomicAddFunctor, NUM_WARP><<<NUM_BLOCK,NUM_THREAD>>>(
-        N, dev_a, dev_b, dev_ret);
+    reduce<float, MultipleFunctor<float>, AddFunctor<float>, AtomicAddFunctor<float>, NUM_WARP><<<NUM_BLOCK,
+            NUM_THREAD>>>(N, dev_a, dev_b, dev_ret);
     check_error(cudaGetLastError());
     check_error(cudaDeviceSynchronize());
     // copy output

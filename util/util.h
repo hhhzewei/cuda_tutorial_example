@@ -23,41 +23,49 @@ __device__ __host__ __forceinline__ T &_2D_2_1D(T *a, const unsigned i, const un
     return a[i * step + j];
 }
 
-template<typename T, template<typename>class ReduceFunc, unsigned NUM>
-__device__ __forceinline__ void shuffle_xor_reduce(T &value) {
-    ReduceFunc<T> reduce_func{};
+template<typename T, typename ReduceFunc, unsigned NUM>
+__device__ __forceinline__ void shuffle_xor_reduce(T &value, ReduceFunc reduce_func = {}) {
 #pragma unroll
     for (unsigned offset = NUM >> 1; offset > 0; offset >>= 1) {
         value = reduce_func(value, __shfl_xor_sync(0xffffffff, value, offset));
     }
 }
 
-template<typename T, template<typename>class ReduceOp, unsigned NUM>
-__device__ __forceinline__ void shuffle_down_reduce(T &value) {
-    ReduceOp<T> reduce_op{};
+template<typename T, typename ReduceFunc, unsigned NUM>
+__device__ __forceinline__ void shuffle_down_reduce(T &value, ReduceFunc reduce_func = {}) {
 #pragma unroll
     for (unsigned offset = NUM >> 1; offset > 0; offset >>= 1) {
-        value = reduce_op(value, __shfl_down_sync(0xffffffff, value, offset));
+        value = reduce_func(value, __shfl_down_sync(0xffffffff, value, offset));
     }
 }
 
 namespace my_math {
-    __device__ __forceinline__ float fmax(float a, float b) {
+    __device__ __host__ __forceinline__ float fmax(float a, float b) {
         return ::fmaxf(a, b);
     }
 
-    __device__ __forceinline__ float exp(float x) {
+    __device__ __host__ __forceinline__ float exp(float x) {
         return ::expf(x);
     }
 
     template<typename T>
-    __device__ __forceinline__ constexpr T max_value() {
+    __device__ __host__ __forceinline__ constexpr T max_value() {
         return T{};
     }
 
     template<>
-    __device__ __forceinline__ constexpr float max_value<float>() {
+    __device__ __host__ __forceinline__ constexpr float max_value<float>() {
         return FLT_MAX;
+    }
+
+    template<typename T>
+    __device__ __host__ __forceinline__ constexpr T min_value() {
+        return T{};
+    }
+
+    template<>
+    __device__ __host__ __forceinline__ constexpr float min_value<float>() {
+        return -FLT_MAX;
     }
 }
 
@@ -71,16 +79,18 @@ printf("CudaSuccess\n"); \
 
 void check_error(cudaError_t err);
 
-struct NoInit{};
+struct NoInit {
+};
 
-template<typename T, bool need_host, typename Initializer = NoInit>
+template<typename T, bool need_host>
 struct DeviceMemory {
-    T *p = nullptr; // 不malloc，不需要引用
+    T *p = nullptr;
     T *dev_p;
     unsigned size;
     cudaStream_t stream;
 
-    explicit DeviceMemory(const unsigned size,Initializer initializer) : size(size), stream() {
+    template<typename Initializer = NoInit>
+    explicit DeviceMemory(const unsigned size, Initializer initializer = Initializer{}) : size(size), stream() {
         cudaStreamCreate(&stream);
         cudaMallocAsync(&dev_p, size * sizeof(T), stream);
         if constexpr (need_host) {
@@ -102,6 +112,12 @@ struct DeviceMemory {
         cudaStreamDestroy(stream);
         if constexpr (need_host) {
             free(p);
+        }
+    }
+
+    void deviceToHost() const {
+        if constexpr (need_host) {
+            cudaMemcpy(p, dev_p, size * sizeof(T), cudaMemcpyDeviceToHost);
         }
     }
 };

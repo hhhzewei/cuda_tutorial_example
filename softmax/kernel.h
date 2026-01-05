@@ -31,7 +31,7 @@ template<typename T, unsigned NUM_WARP>
 __global__ void softmax_online_1(const unsigned N, T *x, T *maxs, T *exp_sums) {
     __shared__ T s_exp_sum[NUM_WARP];
     __shared__ T s_max[NUM_WARP];
-    constexpr T MIN_VALUE = -my_math::max_value<T>();
+    constexpr T MIN_VALUE = my_math::min_value<T>();
     const unsigned threadIdxGlobal = threadIdx.x + blockIdx.x * blockDim.x, NUM_THREAD = gridDim.x * blockDim.x,
             warpIdx = threadIdx.x / WARP_SIZE, lane = threadIdx.x % WARP_SIZE;
     T max = MIN_VALUE, exp_sum = 0;
@@ -63,7 +63,7 @@ __global__ void softmax_online_2(const unsigned N, T *x, T *logits, const unsign
     const unsigned threadIdxGlobal = threadIdx.x + blockIdx.x * blockDim.x, NUM_THREAD = gridDim.x * blockDim.x,
             warpIdx = threadIdx.x / WARP_SIZE, lane = threadIdx.x % WARP_SIZE;
     // reduce
-    T max = -my_math::max_value<T>(), exp_sum = 0;
+    T max = my_math::min_value<T>(), exp_sum = 0;
     // 每个block都要完成reduce
     for (unsigned i = threadIdx.x; i < N_block; i += blockDim.x) {
         T tmp_max = maxs[i];
@@ -79,7 +79,7 @@ __global__ void softmax_online_2(const unsigned N, T *x, T *logits, const unsign
         s_exp_sum[warpIdx] = exp_sum;
     }
     __syncthreads();
-    max = lane < NUM_WARP ? s_max[lane] : -my_math::max_value<float>();
+    max = lane < NUM_WARP ? s_max[lane] : my_math::min_value<float>();
     exp_sum = lane < NUM_WARP ? s_exp_sum[lane] : 0;
     shuffle_reduce_softmax<T, NUM_WARP>(max, exp_sum);
     // broadcast

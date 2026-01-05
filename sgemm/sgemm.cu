@@ -26,9 +26,9 @@ int main() {
     constexpr unsigned M = 1 << 11, N = 1 << 11, K = 1 << 12;
     auto initializer_a = [](unsigned i) { return 0.1f; };
     auto initializer_b = [](unsigned i) { return 0.2f; };
-    const DeviceMemory<float, true, decltype(initializer_a)> a_mem(M * K, initializer_a);
-    const DeviceMemory<float, true, decltype(initializer_b)> b_mem(K * N, initializer_b);
-    const DeviceMemory<float, true> ret_mem(M * N, NoInit{});
+    const DeviceMemory<float, true> a_mem(M * K, initializer_a);
+    const DeviceMemory<float, true> b_mem(K * N, initializer_b);
+    const DeviceMemory<float, true> ret_mem(M * N);
     // call cublas sgemm
     call_sgemm_cublas(M, K, N, a_mem.dev_p, b_mem.dev_p, ret_mem.dev_p, ret_mem.p);
     std::cout << "call sgemm cublas kernel: " << sgemm_error(M, K, N, a_mem.p, b_mem.p, ret_mem.p) << std::endl;

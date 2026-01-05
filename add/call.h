@@ -33,7 +33,7 @@ void call_add_float4(const unsigned N, float *dev_a, float *dev_b, float *dev_re
 inline void call_add_v1(const unsigned N, float *dev_a, float *dev_b, float *dev_ret, float *ret) {
     // kernel
     constexpr unsigned NUM_THREAD = 256, NUM_BLOCK = CEIL(NUM_SM*NUM_THREAD_PER_SM, NUM_THREAD);
-    element_wise<float, AddFunctor><<<NUM_BLOCK,NUM_THREAD>>>(N, dev_a, dev_b, dev_ret);
+    element_wise<float, AddFunctor<float> ><<<NUM_BLOCK,NUM_THREAD>>>(N, dev_a, dev_b, dev_ret);
     check_error(cudaGetLastError());
     check_error(cudaDeviceSynchronize());
     // memcpy

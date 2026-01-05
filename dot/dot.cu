@@ -18,9 +18,9 @@ int main() {
     constexpr unsigned N = 1 << 20;
     auto initializer_a = [](unsigned i) { return 1.0f; };
     auto initializer_b = [](unsigned i) { return 1.0f; };
-    const DeviceMemory<float, true, decltype(initializer_a)> a_mem(N, initializer_a);
-    const DeviceMemory<float, true, decltype(initializer_b)> b_mem(N, initializer_b);
-    const DeviceMemory<float, true> ret_mem(N, NoInit{});
+    const DeviceMemory<float, true> a_mem(N, initializer_a);
+    const DeviceMemory<float, true> b_mem(N, initializer_b);
+    const DeviceMemory<float, true> ret_mem(N);
     // call dot cublas
     call_dot_cublas(N, a_mem.dev_p, b_mem.dev_p, ret_mem.dev_p, ret_mem.p);
     std::cout << "dot cublas error: " << dot_error(N, a_mem.p, b_mem.p, ret_mem.p) << std::endl;

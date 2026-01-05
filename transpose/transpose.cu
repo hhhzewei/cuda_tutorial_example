@@ -20,8 +20,8 @@ float transpose_error(const unsigned M, const unsigned N, const float *input, co
 int main() {
     constexpr unsigned M = 1 << 10, N = 1 << 11;
     auto initializer_input = [](unsigned i) { return i; };
-    const DeviceMemory<float, true, decltype(initializer_input)> input_mem(M * N, initializer_input);
-    const DeviceMemory<float, true> output_mem(M * N, NoInit{});
+    const DeviceMemory<float, true> input_mem(M * N, initializer_input);
+    const DeviceMemory<float, true> output_mem(M * N);
     // call transpose naive kernel
     call_transpose_naive(M, N, input_mem.dev_p, output_mem.dev_p, output_mem.p);
     std::cout << "transpose naive error: " << transpose_error(M, N, input_mem.p, output_mem.p) << std::endl;
