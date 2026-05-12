@@ -16,13 +16,13 @@ find_package(Torch REQUIRED)
 
 include_directories(${PROJECT_SOURCE_DIR})
 
-add_subdirectory(add)
+#add_subdirectory(add)
+#
+#add_subdirectory(dot)
+#
+#add_subdirectory(transpose)
 
-add_subdirectory(dot)
+add_subdirectory(sgemm)
 
-add_subdirectory(transpose)
-
-#add_subdirectory(sgemm)
-
-add_subdirectory(softmax)
+#add_subdirectory(softmax)
 

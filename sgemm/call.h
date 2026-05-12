@@ -142,4 +142,8 @@ void call_sgemm_tensor_core_v1(unsigned M, unsigned K, unsigned N, const float *
 
 void call_sgemm_tensor_core_v2(unsigned M, unsigned K, unsigned N, const float *dev_a, const float *dev_b,
                                float *dev_ret, float *ret);
+
+void call_gemm(unsigned M, unsigned K, unsigned N, const float *dev_a, const float *dev_b,
+                               float *dev_c, float *ret);
+
 #endif //CUDA_TUTORIAL_EXAMPLE_CALL_H

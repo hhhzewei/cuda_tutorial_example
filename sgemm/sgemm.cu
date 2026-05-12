@@ -68,4 +68,7 @@ int main() {
     // call sgemm tensor core v2 kernel
     call_sgemm_tensor_core_v2(M, K, N, a_mem.dev_p, b_mem.dev_p, ret_mem.dev_p, ret_mem.p);
     std::cout << "call sgemm tensor core v2 kernel: " << sgemm_error(M, K, N, a_mem.p, b_mem.p, ret_mem.p) << std::endl;
+    // call gemm kernel
+    call_gemm(M, K, N, a_mem.dev_p, b_mem.dev_p, ret_mem.dev_p, ret_mem.p);
+    std::cout << "call gemm kernel: " << sgemm_error(M, K, N, a_mem.p, b_mem.p, ret_mem.p) << std::endl;
 }
