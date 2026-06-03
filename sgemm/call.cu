@@ -6,6 +6,7 @@
 #include <cublas_v2.h>
 
 #include "sgemm/gemm.h"
+#include "sgemm/gemm_sm80_cuda.h"
 // #include "cutlass/gemm/device/gemm.h"
 // #include "cutlass/util/device_memory.h"
 
@@ -142,13 +143,29 @@ void call_sgemm_tensor_core_v2(const unsigned M, const unsigned K, const unsigne
     cudaMemcpy(ret, dev_ret, M * N * sizeof(float), cudaMemcpyDeviceToHost);
 }
 
-void call_gemm(const unsigned M, const unsigned K, const unsigned N, const float *dev_a, const float *dev_b, float *dev_c, float *ret) {
-    constexpr unsigned kThreadM = 2, kThreadN = 2;
+void call_gemm(const unsigned M, const unsigned K, const unsigned N, const float *dev_a, const float *dev_b,
+               float *dev_c, float *ret) {
+    constexpr unsigned kThreadM = 4, kThreadN = 2;
     constexpr unsigned kNumThread = 256;
     constexpr unsigned kThreadLayoutM = kNumThread / 32, kThreadLayoutN = 32;
     constexpr unsigned kBlockM = kThreadLayoutM * kThreadM, kBlockN = kThreadLayoutN * kThreadN;
     dim3 gridDim{N / kBlockN, M / kBlockM};
     gemm<float, kBlockM, kBlockN, 32, kThreadM, kThreadN><<<gridDim,kNumThread>>>(dev_a, dev_b, dev_c, M, N, K);
+    check_error(cudaGetLastError());
+    check_error(cudaDeviceSynchronize());
+    cudaMemcpy(ret, dev_c, M * N * sizeof(float), cudaMemcpyDeviceToHost);
+}
+
+void call_gemm_sm80_cuda(const unsigned M, const unsigned K, const unsigned N, const float *dev_a, const float *dev_b,
+                         float *dev_c, float *ret) {
+    constexpr unsigned kThreadM = 4, kThreadN = 4;
+    constexpr unsigned kThreadLayoutM = 16, kThreadLayoutN = 16;
+    constexpr unsigned kNumThread = kThreadLayoutM * kThreadLayoutN;
+    constexpr unsigned kBlockM = kThreadLayoutM * kThreadM, kBlockN = kThreadLayoutN * kThreadN;
+    constexpr unsigned kBlockK = 16;
+    dim3 gridDim{N / kBlockN, M / kBlockM};
+    gemm_sm80_cuda<float, kBlockM, kBlockN, kBlockK, kThreadM, kThreadN><<<gridDim,kNumThread>>>(
+        dev_a, dev_b, dev_c, M, N, K);
     check_error(cudaGetLastError());
     check_error(cudaDeviceSynchronize());
     cudaMemcpy(ret, dev_c, M * N * sizeof(float), cudaMemcpyDeviceToHost);

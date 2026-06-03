@@ -10,3 +10,11 @@ void check_error(const cudaError_t err) {
         printf("Error:%s\n", cudaGetErrorString(err));
     }
 }
+
+int getSmCount(int device_id) {
+    cudaGetDevice(&device_id);
+    int sm_count = 0;
+    // 查询 SM 数量
+    check_error(cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, device_id));
+    return sm_count;
+}

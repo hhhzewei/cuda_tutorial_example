@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include "call.h"
+#include "util/device_memory.h"
 #include "util/util.h"
 
 float dot_error(const unsigned N, const float *a, const float *b, const float *ret) {

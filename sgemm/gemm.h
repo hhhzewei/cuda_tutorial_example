@@ -1,21 +1,13 @@
-//
-// Created by hzw on 2026/5/4.
-//
 #pragma once
-
-template<typename T>
-struct VecType128b;
-
-template<>
-struct VecType128b<float> {
-    using Vec = float4;
-};
+#include "sgemm/vec_type_128b.h"
 
 template<
     typename T,
     unsigned kBlockM, unsigned kBlockN, unsigned kBlockK, unsigned kThreadM, unsigned kThreadN>
 __global__ void gemm(const T *a, const T *b, T *c,
                      unsigned M, const unsigned N, const unsigned K) {
+    constexpr unsigned kThreadLayoutM = kBlockM / kThreadM;
+    constexpr unsigned kThreadLayoutN = kBlockN / kThreadN;
     constexpr unsigned kNumPer128b = 16 / sizeof(T);
     using Vec128b = typename VecType128b<T>::Vec;
     __shared__ T s_a[2][kBlockM][kBlockK];
@@ -24,10 +16,8 @@ __global__ void gemm(const T *a, const T *b, T *c,
     const unsigned block_x = blockIdx.x;
     const unsigned block_y = blockIdx.y;
     const unsigned num_thread = blockDim.x * blockDim.y;
-    const unsigned thread_layout_m = num_thread / 32;
-    constexpr unsigned thread_layout_n = 32;
-    const unsigned thread_layout_i = thread_idx / thread_layout_n;
-    const unsigned thread_layout_j = thread_idx % thread_layout_n;
+    const unsigned thread_layout_i = thread_idx / kThreadLayoutN;
+    const unsigned thread_layout_j = thread_idx % kThreadLayoutN;
     bool flag = false;
     T r_a[kThreadM];
     T r_b[kThreadN];
@@ -56,11 +46,11 @@ __global__ void gemm(const T *a, const T *b, T *c,
         for (unsigned k = 0; k < kBlockK; ++k) {
 #pragma unroll
             for (unsigned i = 0; i < kThreadM; ++i) {
-                r_a[i] = s_a[flag][thread_layout_i + i * thread_layout_m][k];
+                r_a[i] = s_a[flag][thread_layout_i + i * kThreadLayoutM][k];
             }
 #pragma unroll
             for (unsigned i = 0; i < kThreadN; ++i) {
-                r_b[i] = s_b[flag][k][thread_layout_j + i * thread_layout_n];
+                r_b[i] = s_b[flag][k][thread_layout_j + i * kThreadLayoutN];
             }
 #pragma unroll
             for (unsigned i = 0; i < kThreadM; ++i) {
@@ -77,8 +67,8 @@ __global__ void gemm(const T *a, const T *b, T *c,
     for (unsigned i = 0; i < kThreadM; ++i) {
 #pragma unroll
         for (unsigned j = 0; j < kThreadN; ++j) {
-            const unsigned row_idx = thread_layout_i + i * thread_layout_m;
-            const unsigned col_idx = thread_layout_j + j * thread_layout_n;
+            const unsigned row_idx = thread_layout_i + i * kThreadLayoutM;
+            const unsigned col_idx = thread_layout_j + j * kThreadLayoutN;
             s_c[row_idx][col_idx] = r_c[i][j];
         }
     }

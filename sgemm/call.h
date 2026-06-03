@@ -120,7 +120,7 @@ void call_sgemm_thread_tile_v6(const unsigned M, const unsigned K, const unsigne
 // template<unsigned TILE_M = 128, unsigned TILE_K = 8, unsigned TILE_N = 128,
 //     unsigned THREAD_TILE_M = 8, unsigned THREAD_TILE_N = 8>
 template<unsigned TILE_M = 64, unsigned TILE_K = 16, unsigned TILE_N = 64,
-    unsigned THREAD_TILE_M = 4, unsigned THREAD_TILE_N = 4>// 设定tile尺寸减少读共享内存的bank conflict
+    unsigned THREAD_TILE_M = 4, unsigned THREAD_TILE_N = 4> // 设定tile尺寸减少读共享内存的bank conflict
 void call_sgemm_thread_tile_v7(const unsigned M, const unsigned K, const unsigned N, float *dev_a, float *dev_b,
                                float *dev_ret, float *ret) {
     // kernel
@@ -144,6 +144,12 @@ void call_sgemm_tensor_core_v2(unsigned M, unsigned K, unsigned N, const float *
                                float *dev_ret, float *ret);
 
 void call_gemm(unsigned M, unsigned K, unsigned N, const float *dev_a, const float *dev_b,
-                               float *dev_c, float *ret);
+               float *dev_c, float *ret);
+
+void call_gemm_sm80_cuda(unsigned M, unsigned K, unsigned N, const float *dev_a, const float *dev_b,
+                         float *dev_c, float *ret);
+
+void call_gemm_sm80_cute(int M, int K, int N,
+                         const half *dev_a, const half *dev_b, half *dev_c, half *ret);
 
 #endif //CUDA_TUTORIAL_EXAMPLE_CALL_H

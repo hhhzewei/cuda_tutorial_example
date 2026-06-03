@@ -4,7 +4,7 @@
 #ifndef CUDA_TUTORIAL_EXAMPLE_KERNEL_H
 #define CUDA_TUTORIAL_EXAMPLE_KERNEL_H
 
-#include "../util/util.h"
+#include "util/util.h"
 
 template<typename T, unsigned NUM>
 __device__ __forceinline__ void shuffle_reduce_softmax(T &max, T &exp_sum) {

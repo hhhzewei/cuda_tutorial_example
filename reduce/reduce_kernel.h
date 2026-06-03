@@ -4,7 +4,7 @@
 
 #ifndef CUDA_TUTORIAL_EXAMPLE_REDUCE_KERNEL_H
 #define CUDA_TUTORIAL_EXAMPLE_REDUCE_KERNEL_H
-#include "../util/util.h"
+#include "util/util.h"
 
 template<typename T,
     typename CalFunc, typename ReduceFunc, typename AtomicFunc,

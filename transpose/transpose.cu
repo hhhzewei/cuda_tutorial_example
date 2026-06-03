@@ -5,7 +5,7 @@
 
 #include <iostream>
 #include "call.h"
-#include "util/util.h"
+#include "util/device_memory.h"
 
 float transpose_error(const unsigned M, const unsigned N, const float *input, const float *output) {
     float ret = 0.0f;

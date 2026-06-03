@@ -6,10 +6,10 @@
 #include <iostream>
 
 #include "call.h"
-#include "util/util.h"
+#include "util/device_memory.h"
 
 float softmax_error(const unsigned N, const float *x, const float *logits) {
-    float max = -FLT_MAX;
+    float max = std::numeric_limits<float>::lowest();
     for (unsigned i = 0; i < N; ++i)max = fmaxf(max, x[i]);
     float exp_sum = 0.0;
     for (unsigned i = 0; i < N; ++i)exp_sum += expf(x[i] - max);
@@ -22,7 +22,7 @@ float softmax_error(const unsigned N, const float *x, const float *logits) {
 
 int main() {
     constexpr unsigned N = 1 << 20;
-    auto initializer_x = [](unsigned i) { return static_cast<float>(i) - (N >> 1); };
+    auto initializer_x = [=](unsigned i) { return static_cast<float>(i) - (N >> 1); };
     const DeviceMemory<float, true> x_mem(N, initializer_x);
     const DeviceMemory<float, true> logits_mem(N, NoInit{});
     // call torch softmax

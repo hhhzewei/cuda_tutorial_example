@@ -1,10 +1,5 @@
 #!/bin/bash
 
-rm -rf ./build
-mkdir -p build
-cd ./build || exit
-cmake .. > /dev/null 2>&1
-make
 nsys_execute(){
   executable_path="./$1/$1"
   if [ -f "$executable_path" ]; then

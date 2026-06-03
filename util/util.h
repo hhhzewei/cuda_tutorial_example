@@ -79,47 +79,22 @@ printf("CudaSuccess\n"); \
 
 void check_error(cudaError_t err);
 
-struct NoInit {
-};
-
-template<typename T, bool need_host>
-struct DeviceMemory {
-    T *p = nullptr;
-    T *dev_p;
-    unsigned size;
-    cudaStream_t stream;
-
-    template<typename Initializer = NoInit>
-    explicit DeviceMemory(const unsigned size, Initializer initializer = Initializer{}) : size(size), stream() {
-        cudaStreamCreate(&stream);
-        cudaMallocAsync(&dev_p, size * sizeof(T), stream);
-        if constexpr (need_host) {
-            p = static_cast<T *>(malloc(size * sizeof(T)));
-            if constexpr (!std::is_same_v<NoInit, Initializer>) {
-                for (unsigned i = 0; i < size; ++i) {
-                    p[i] = initializer(i);
-                }
-                cudaMemcpyAsync(dev_p, p, size * sizeof(T), cudaMemcpyHostToDevice, stream);
+template<typename T>
+float gemm_error(const unsigned M, const unsigned K, const unsigned N, const T *a, const T *b,
+                 const T *ret) {
+    float error = 0.0f;
+    for (unsigned i = 0; i < M; ++i) {
+        for (unsigned j = 0; j < N; ++j) {
+            float value = 0;
+            for (unsigned k = 0; k < K; ++k) {
+                value += static_cast<float>(a[i * K + k]) * static_cast<float>(b[k * N + j]);
             }
+            error = fmaxf(error, fabs(value - static_cast<float>(ret[i * N + j])));
         }
     }
+    return error;
+}
 
-    DeviceMemory(const DeviceMemory &x) = delete;
-
-    ~DeviceMemory() {
-        cudaFreeAsync(dev_p, stream);
-        cudaStreamSynchronize(stream);
-        cudaStreamDestroy(stream);
-        if constexpr (need_host) {
-            free(p);
-        }
-    }
-
-    void deviceToHost() const {
-        if constexpr (need_host) {
-            cudaMemcpy(p, dev_p, size * sizeof(T), cudaMemcpyDeviceToHost);
-        }
-    }
-};
+int getSmCount(int device_id);
 
 #endif //CUDA_TUTORIAL_EXAMPLE_UTIL_CUH

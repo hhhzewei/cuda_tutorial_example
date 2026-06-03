@@ -6,6 +6,7 @@
 
 #include "element_wise/element_wise_kernel.h"
 #include "reduce/reduce_kernel.h"
+#include "softmax/kernel.h"
 #include "util/functor.h"
 
 void call_softmax_torch(unsigned N, float *dev_x, float *logits) {
@@ -48,13 +49,11 @@ void call_softmax_naive(const unsigned N, const DeviceMemory<float, true> &x_mem
     reduce<float, IdentityFunctor<float>, MaxFunctor<float>, AtomicMaxFunctor<float>, NUM_WARP><<<NUM_BLOCK,NUM_THREAD>>
             >(N, x_mem.dev_p, max_p);
     max_mem.deviceToHost();
-    std::cout << max_mem.p[0] << std::endl;
     // reduce sum
     auto exp_func = [=] __device__ (const float x) { return expf(x - *max_p); };
     reduce<float, decltype(exp_func), AddFunctor<float>, AtomicAddFunctor<float>, NUM_WARP><<<NUM_BLOCK,NUM_THREAD>>>(
         N, x_mem.dev_p, exp_sum_p, exp_func);
     exp_sum_mem.deviceToHost();
-    std::cout << exp_sum_mem.p[0] << std::endl;
     // element wise
     auto softmax_func = [=] __device__ (const float x) { return expf(x - *max_p) / *exp_sum_p; };
     element_wise<float, decltype(softmax_func)><<<NUM_BLOCK,NUM_THREAD>>>(
