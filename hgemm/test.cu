@@ -1,6 +1,8 @@
 #include <random>
 #include <cute/tensor_impl.hpp>
 #include <cute/atom/copy_atom.hpp>
+#include <cutlass/detail/layout.hpp>
+#include <cutlass/gemm/device/gemm.h>
 using T = cute::half_t;
 
 
@@ -14,11 +16,11 @@ __global__ void hgemm_sm80_cute(const T *a, const T *b, half *c) {
     constexpr int kBlockN = 128;
     constexpr int kBlockK = 64;
 
-    constexpr int kCopyThreadLayoutM = 32;
+    constexpr int kCopyThreadLayoutM = 16;
     constexpr int kCopyThreadLayoutN = 8;
 
     constexpr int kMmaWarpLayoutM = 2;
-    constexpr int kMmaWarpLayoutN = 4;
+    constexpr int kMmaWarpLayoutN = 2;
     CUTE_STATIC_ASSERT(kMmaWarpLayoutM * kMmaWarpLayoutN * 32 == kCopyThreadLayoutM * kCopyThreadLayoutN);
 
     

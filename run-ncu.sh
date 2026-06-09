@@ -45,8 +45,8 @@ ncu_execute2(){
 #ncu_execute2 sgemm sgemm sgemm_tensor_core_v2
 #ncu_execute2 sgemm sgemm gemm_sm80_cuda
 # hgemm
-#ncu_execute2 hgemm hgemm hgemm_sm80_cute
+ncu_execute2 hgemm hgemm hgemm_sm80_cute
 #ncu_execute2 hgemm hgemm gemm_device_cute_example
 #ncu_execute2 hgemm hgemm sm80_xmma_gemm_f16f16_f16f32_f32_tn_n_tilesize160x128x32_stage4_warpsize2x2x1_tensor16x8x16_execute_kernel__5x_cublas
 #ncu_execute2 hgemm hgemm Kernel
-ncu_execute hgemm
+#ncu_execute hgemm

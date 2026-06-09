@@ -15,5 +15,5 @@ execute(){
 #execute dot
 #execute transpose
 #execute sgemm
-execute softmax
-#execute hgemm
+#execute softmax
+execute hgemm

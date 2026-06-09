@@ -126,8 +126,8 @@ template<typename T>
 void call_hgemm_sm80_cute(const int M, const int K, const int N,
                           const T *dev_a, const T *dev_b, T *dev_c, T *ret) {
     constexpr int kBlockM = 128, kBlockN = 128, kBlockK = 64;
-    constexpr int kMmaWarpLayoutM = 2, kMmaWarpLayoutN = 4;
-    constexpr int kCopyThreadLayoutM = 32, kCopyThreadLayoutN = 8;
+    constexpr int kMmaWarpLayoutM = 2, kMmaWarpLayoutN = 2;
+    constexpr int kCopyThreadLayoutM = 16, kCopyThreadLayoutN = 8;
     constexpr int kNumThread = kCopyThreadLayoutM * kCopyThreadLayoutN;
     constexpr int kNumPipe = 2;
     constexpr int kSMemSize = sizeof(T) * std::max(kBlockK * (kBlockM + kBlockN) * kNumPipe,

@@ -31,6 +31,8 @@ __global__ void hgemm_sm80_cute(const T *a, const T *b, T *c, const int M, const
     T *s_b = s_mem + kNumPipe * kBlockM * kBlockK;
     T *s_c = s_mem;
     // swizzle
+    // 因为ldmatrix会搬运4个8x8共享内存tile，造成四次8-way bank conflict, ncu上显示合并成32-way bank conflict
+
     auto swizzle_atom_AB = composition(Swizzle<3, 3, 3>{},
                                        Layout<Shape<_8, Shape<_8, _8> >, Stride<_64, Stride<_1, _8> > >{});
     auto swizzle_atom_C = composition(Swizzle<3, 1, 5>{},
@@ -107,12 +109,10 @@ __global__ void hgemm_sm80_cute(const T *a, const T *b, T *c, const int M, const
         // compute
         cp_async_wait<kNumPipe - 1>();
         __syncthreads();
-#pragma unroll
-        for (int mma_k_idx = 0; mma_k_idx < size<2>(tCrA); ++mma_k_idx) {
-            copy(tiled_s2r_copy_A, tXsA(_, _, mma_k_idx, pipe_idx), tXrA(_, _, mma_k_idx));
-            copy(tiled_s2r_copy_B, tXsB(_, _, mma_k_idx, pipe_idx), tXrB(_, _, mma_k_idx));
-            gemm(tiled_mma, tCrA(_, _, mma_k_idx), tCrB(_, _, mma_k_idx), tCrC);
-        }
+        copy(tiled_s2r_copy_A, tXsA(_, _, _, pipe_idx), tXrA);
+        copy(tiled_s2r_copy_B, tXsB(_, _, _, pipe_idx), tXrB);
+        gemm(tiled_mma, tCrA, tCrB, tCrC);
+
         __syncthreads();
         // load
         copy(tiled_copy_in, tAgA(_, _, _, tile_idx), tAsA(_, _, _, pipe_idx));
@@ -134,16 +134,11 @@ __global__ void hgemm_sm80_cute(const T *a, const T *b, T *c, const int M, const
             default: ;
         }
         __syncthreads();
-#pragma unroll
-        for (int mma_k_idx = 0; mma_k_idx < size<2>(tCrA); ++mma_k_idx) {
-            copy(tiled_s2r_copy_A, tXsA(_, _, mma_k_idx, pipe_idx), tXrA(_, _, mma_k_idx));
-            copy(tiled_s2r_copy_B, tXsB(_, _, mma_k_idx, pipe_idx), tXrB(_, _, mma_k_idx));
-            gemm(tiled_mma, tCrA(_, _, mma_k_idx), tCrB(_, _, mma_k_idx), tCrC);
-        }
+        copy(tiled_s2r_copy_A, tXsA(_, _, _, pipe_idx), tXrA);
+        copy(tiled_s2r_copy_B, tXsB(_, _, _, pipe_idx), tXrB);
+        gemm(tiled_mma, tCrA, tCrB, tCrC);
         pipe_idx = (pipe_idx + 1) % kNumPipe;
     }
-
-    // __syncthreads(); // 由于复用共享内存，后续写回共享内存和mma读取共享内存冲突
 
     // write
 #pragma unroll
